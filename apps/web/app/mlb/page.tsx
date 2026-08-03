@@ -62,7 +62,7 @@ export default async function MlbPage() {
 
         <div className="grid">
           {data.games.map((game: any) => (
-            <article className="card" key={game.game_id}>
+            <Link className="card mlb-link-card" key={game.game_id} href={`/mlb/${game.game_id}`}>
               <div className="kicker">{game.status}</div>
               <div className="pick">{game.moneyline_pick}</div>
               <p className="subtle">{game.away_team} at {game.home_team}</p>
@@ -72,7 +72,8 @@ export default async function MlbPage() {
                 <span style={{ width: `${game.confidence}%` }} />
               </div>
               <div className="confidence">{game.confidence}% confidence</div>
-            </article>
+              <span className="primary-link">View game →</span>
+            </Link>
           ))}
         </div>
       </section>

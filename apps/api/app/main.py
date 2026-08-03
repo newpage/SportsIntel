@@ -3,7 +3,7 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from app.engine import all_predictions
 from app.news import fetch_yahoo_nfl_news
-from app.mlb import mlb_home
+from app.mlb import mlb_game, mlb_home
 
 app = FastAPI(title="SportsIntel API", version="0.2.0")
 app.add_middleware(
@@ -40,6 +40,14 @@ def home():
 @app.get("/api/mlb")
 def mlb():
     return mlb_home()
+
+
+@app.get("/api/mlb/{game_id}")
+def mlb_game_detail(game_id: str):
+    result = mlb_game(game_id)
+    if result:
+        return result
+    raise HTTPException(status_code=404, detail="MLB game not found")
 
 
 @app.get("/api/games/{game_id}")

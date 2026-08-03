@@ -19,6 +19,17 @@ def _pct(record: dict) -> float:
         return 0.5
 
 
+def _pitcher(game: dict, side: str) -> str | None:
+    probable = game.get("teams", {}).get(side, {}).get("probablePitcher")
+    return probable.get("fullName") if probable else None
+
+
+def _record(record: dict) -> str:
+    wins = record.get("wins")
+    losses = record.get("losses")
+    return f"{wins}-{losses}" if wins is not None and losses is not None else "Record unavailable"
+
+
 def _predict(game: dict) -> dict:
     away = game["teams"]["away"]
     home = game["teams"]["home"]
@@ -41,6 +52,10 @@ def _predict(game: dict) -> dict:
         "status": game["status"]["detailedState"],
         "winner": winner,
         "win_probability": round(probability, 3),
+        "away_record": _record(away.get("leagueRecord", {})),
+        "home_record": _record(home.get("leagueRecord", {})),
+        "away_pitcher": _pitcher(game, "away"),
+        "home_pitcher": _pitcher(game, "home"),
         "confidence": confidence,
         "moneyline_pick": winner,
         "run_line_pick": f"{winner} -1.5",
@@ -48,7 +63,10 @@ def _predict(game: dict) -> dict:
         "reasons": [
             f"{winner} has the stronger season record after a small home-field adjustment.",
             f"Current team-record gap is {gap:.3f}.",
-            "This first MLB model intentionally uses only team record and home field.",
+            (
+                f"Probable pitchers: {_pitcher(game, 'away') or 'TBD'} vs "
+                f"{_pitcher(game, 'home') or 'TBD'}."
+            ),
         ],
     }
 
@@ -95,3 +113,7 @@ def mlb_home() -> dict:
     }
     _CACHE = (now + CACHE_SECONDS, result)
     return result
+
+
+def mlb_game(game_id: str) -> dict | None:
+    return next((game for game in mlb_home()["games"] if game["game_id"] == game_id), None)

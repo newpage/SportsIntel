@@ -145,3 +145,8 @@ button { background:var(--accent); color:#ffffff; border:0; border-radius:10px; 
   .picks-summary > div { flex:1; min-width:0; text-align:left; }
   .picks-grid { grid-template-columns:1fr; }
 }
+
+.mlb-link-card { display:flex; flex-direction:column; min-height:300px; }
+.mlb-link-card .primary-link { margin-top:auto; padding-top:16px; }
+.mlb-detail-grid { display:grid; grid-template-columns:repeat(3,1fr); gap:12px; margin-top:24px; }
+@media (max-width:760px){ .mlb-detail-grid{grid-template-columns:1fr;} }
