@@ -118,3 +118,30 @@ button { background:var(--accent); color:#ffffff; border:0; border-radius:10px; 
   .market-grid { grid-template-columns:1fr; }
   .confidence-panel { max-width:none; }
 }
+
+.picks-heading { display:flex; justify-content:space-between; align-items:flex-end; gap:24px; margin-bottom:24px; }
+.picks-heading h1 { margin-top:8px; }
+.picks-heading p { margin:0; }
+.picks-summary { display:flex; gap:12px; }
+.picks-summary > div { min-width:145px; padding:14px 16px; border:1px solid var(--line); border-radius:14px; background:#ffffff; text-align:right; }
+.picks-summary strong { display:block; color:var(--accent); font-size:28px; line-height:1; }
+.picks-summary span { display:block; margin-top:6px; color:var(--muted); font-size:12px; }
+.picks-grid { display:grid; grid-template-columns:repeat(3,1fr); gap:16px; }
+.saved-pick-card { display:flex; flex-direction:column; min-height:235px; }
+.saved-pick-top { display:flex; justify-content:space-between; gap:16px; }
+.saved-pick-name { margin-top:12px; font-size:27px; font-weight:900; line-height:1.15; }
+.saved-confidence { flex:0 0 auto; text-align:right; }
+.saved-confidence strong { display:block; color:var(--good); font-size:26px; }
+.saved-confidence span { color:var(--muted); font-size:12px; }
+.saved-pick-actions { display:flex; justify-content:space-between; align-items:center; gap:12px; margin-top:auto; padding-top:22px; }
+.saved-pick-actions a { color:var(--accent); font-weight:800; }
+.clear-picks-row { display:flex; justify-content:flex-end; margin-top:18px; }
+.danger-button { background:#ffffff; color:var(--danger); border:1px solid #efc7c0; }
+.picks-empty { margin-top:12px; }
+.empty-icon { display:grid; place-items:center; width:54px; height:54px; margin:0 auto 16px; border-radius:50%; background:var(--soft-green); color:var(--good); font-size:26px; font-weight:900; }
+@media (max-width:760px){
+  .picks-heading { align-items:flex-start; flex-direction:column; }
+  .picks-summary { width:100%; }
+  .picks-summary > div { flex:1; min-width:0; text-align:left; }
+  .picks-grid { grid-template-columns:1fr; }
+}
