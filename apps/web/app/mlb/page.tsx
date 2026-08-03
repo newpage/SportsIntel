@@ -36,7 +36,9 @@ export default async function MlbPage() {
       {best ? (
         <section className="card hero-pick">
           <div>
-            <div className="kicker">Best Moneyline Pick</div>
+            <div className="pick-of-day-badge">🏆 Pick of the Day</div>
+            <div className="rating-stars hero-rating-stars">{best.stars}</div>
+            <div className="rating-label">{best.recommendation}</div>
             <div className="hero-pick-name">{best.moneyline_pick}</div>
             <div className="hero-pick-reason">{best.reasons[0]}</div>
           </div>
@@ -68,6 +70,7 @@ export default async function MlbPage() {
           {data.games.map((game: any) => (
             <Link className="card mlb-link-card" key={game.game_id} href={`/mlb/${game.game_id}`}>
               <div className="kicker">{game.status}</div>
+              {game.is_pick_of_day && <div className="pick-of-day-badge compact">🏆 Pick of the Day</div>}
               <div className="rating-stars">{game.stars}</div><div className="rating-label">{game.recommendation}</div><div className="pick">{game.moneyline_pick}</div>
               <p className="subtle">{game.away_team} at {game.home_team}</p>
               <p><strong>Run line:</strong> {game.run_line_pick}</p>

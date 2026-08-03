@@ -166,3 +166,7 @@ button { background:var(--accent); color:#ffffff; border:0; border-radius:10px; 
 
 .rating-stars{font-size:24px;color:#d4a017;font-weight:800;margin-top:8px}
 .rating-label{font-size:14px;font-weight:700;color:#0b63ce;margin:4px 0 8px}
+
+.pick-of-day-badge { display:inline-flex; align-items:center; width:max-content; margin-bottom:10px; padding:7px 10px; border-radius:999px; background:#fff4cc; color:#7a5600; font-size:12px; font-weight:900; text-transform:uppercase; letter-spacing:.06em; }
+.pick-of-day-badge.compact { margin-top:10px; margin-bottom:0; }
+.hero-rating-stars { margin-top:0; font-size:30px; }
