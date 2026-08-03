@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useId, useState } from "react";
+import { useEffect, useId, useRef, useState } from "react";
 
 type ConfidenceFactor = {
   title: string;
@@ -38,23 +38,18 @@ export function ConfidenceDetails({
   variant = "panel",
 }: Props) {
   const [open, setOpen] = useState(false);
+  const dialogRef = useRef<HTMLDialogElement>(null);
   const titleId = useId();
 
   useEffect(() => {
-    if (!open) return;
+    const dialog = dialogRef.current;
+    if (!dialog) return;
 
-    function closeOnEscape(event: KeyboardEvent) {
-      if (event.key === "Escape") setOpen(false);
+    if (open && !dialog.open) {
+      dialog.showModal();
+    } else if (!open && dialog.open) {
+      dialog.close();
     }
-
-    const previousOverflow = document.body.style.overflow;
-    document.body.style.overflow = "hidden";
-    document.addEventListener("keydown", closeOnEscape);
-
-    return () => {
-      document.body.style.overflow = previousOverflow;
-      document.removeEventListener("keydown", closeOnEscape);
-    };
   }, [open]);
 
   return (
@@ -74,60 +69,51 @@ export function ConfidenceDetails({
         </span>
       </button>
 
-      {open && (
-        <div
-          className="confidence-modal-backdrop"
-          role="presentation"
-          onClick={(event) => {
-            if (event.target === event.currentTarget) setOpen(false);
-          }}
+      <dialog
+        ref={dialogRef}
+        className="confidence-modal"
+        aria-labelledby={titleId}
+        onCancel={() => setOpen(false)}
+        onClose={() => setOpen(false)}
+      >
+        <button
+          className="confidence-modal-close"
+          type="button"
+          aria-label="Close confidence explanation"
+          onClick={() => setOpen(false)}
         >
-          <section
-            className="confidence-modal"
-            role="dialog"
-            aria-modal="true"
-            aria-labelledby={titleId}
-          >
-            <button
-              className="confidence-modal-close"
-              type="button"
-              aria-label="Close confidence explanation"
-              onClick={() => setOpen(false)}
-            >
-              ×
-            </button>
+          ×
+        </button>
 
-            <div className="eyebrow">SportsIntel explanation</div>
-            <h2 id={titleId}>{details.title}</h2>
+        <div className="eyebrow">SportsIntel explanation</div>
+        <h2 id={titleId}>{details.title}</h2>
 
-            <div className="confidence-modal-overall">
-              <div className="rating-stars">{stars}</div>
-              <strong>{recommendation}</strong>
-              <span>{confidence}% SportsIntel Confidence</span>
-            </div>
-
-            <div className="confidence-factor-list">
-              {details.factors.map((factor) => (
-                <article className="confidence-factor" key={factor.title}>
-                  <div className="confidence-factor-heading">
-                    <strong>{factor.title}</strong>
-                    <span>{impactLabel(factor.impact)}</span>
-                  </div>
-                  <div className="factor-impact-track" aria-label={`${impactLabel(factor.impact)} impact`}>
-                    <span style={{ width: `${factor.impact * 20}%` }} />
-                  </div>
-                  <p>{factor.summary}</p>
-                </article>
-              ))}
-            </div>
-
-            <div className="confidence-modal-summary">
-              <strong>Overall summary</strong>
-              <p>{details.summary}</p>
-            </div>
-          </section>
+        <div className="confidence-modal-overall">
+          <div className="rating-stars">{stars}</div>
+          <strong>{recommendation}</strong>
+          <span>{confidence}% SportsIntel Confidence</span>
         </div>
-      )}
+
+        <div className="confidence-factor-list">
+          {details.factors.map((factor) => (
+            <article className="confidence-factor" key={factor.title}>
+              <div className="confidence-factor-heading">
+                <strong>{factor.title}</strong>
+                <span>{impactLabel(factor.impact)}</span>
+              </div>
+              <div className="factor-impact-track" aria-label={`${impactLabel(factor.impact)} impact`}>
+                <span style={{ width: `${factor.impact * 20}%` }} />
+              </div>
+              <p>{factor.summary}</p>
+            </article>
+          ))}
+        </div>
+
+        <div className="confidence-modal-summary">
+          <strong>Overall summary</strong>
+          <p>{details.summary}</p>
+        </div>
+      </dialog>
     </>
   );
 }
