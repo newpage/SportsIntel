@@ -5,3 +5,9 @@ export async function getHome() {
   if (!response.ok) throw new Error("Unable to load SportsIntel data");
   return response.json();
 }
+
+export async function getGame(gameId: string) {
+  const response = await fetch(`${API_URL}/api/games/${gameId}`, { cache: "no-store" });
+  if (!response.ok) throw new Error("Unable to load game data");
+  return response.json();
+}
