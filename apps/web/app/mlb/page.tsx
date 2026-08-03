@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { getMlb } from "../../lib/api";
 import { MlbPredictionSnapshot } from "../../components/MlbPredictionSnapshot";
+import { ConfidenceDetails } from "../../components/ConfidenceDetails";
 
 export default async function MlbPage() {
   const data = await getMlb();
@@ -42,13 +43,13 @@ export default async function MlbPage() {
             <div className="hero-pick-name">{best.moneyline_pick}</div>
             <div className="hero-pick-reason">{best.reasons[0]}</div>
           </div>
-          <div className="hero-confidence">
-            <strong>{best.confidence}%</strong>
-            <span>confidence</span>
-            <div className="confidence-track">
-              <span style={{ width: `${best.confidence}%` }} />
-            </div>
-          </div>
+          <ConfidenceDetails
+            confidence={best.confidence}
+            stars={best.stars}
+            recommendation={best.recommendation}
+            details={best.confidence_details}
+            variant="hero"
+          />
         </section>
       ) : (
         <article className="card empty-state">

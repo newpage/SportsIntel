@@ -42,6 +42,69 @@ def _record(record: dict) -> str:
     return f"{wins}-{losses}" if wins is not None and losses is not None else "Record unavailable"
 
 
+def _confidence_details(
+    winner: str,
+    home_name: str,
+    away_name: str,
+    gap: float,
+    away_pitcher: str | None,
+    home_pitcher: str | None,
+) -> dict:
+    record_impact = 5 if gap >= 0.15 else 4 if gap >= 0.08 else 3 if gap >= 0.04 else 2
+    pitchers_confirmed = bool(away_pitcher and home_pitcher)
+    pitcher_impact = 4 if pitchers_confirmed else 2
+    home_pick = winner == home_name
+
+    factors = [
+        {
+            "title": "Season Performance",
+            "impact": record_impact,
+            "summary": (
+                f"{winner} has the stronger season record."
+                if gap >= 0.04
+                else f"{home_name} and {away_name} have relatively similar season records."
+            ),
+        },
+        {
+            "title": "Starting Pitchers",
+            "impact": pitcher_impact,
+            "summary": (
+                f"Both probable starters are confirmed: {away_pitcher} vs {home_pitcher}."
+                if pitchers_confirmed
+                else "At least one probable starting pitcher has not yet been announced."
+            ),
+        },
+        {
+            "title": "Home Field",
+            "impact": 2,
+            "summary": (
+                f"{home_name} receives a small home-field adjustment."
+                if home_pick
+                else f"{winner} remains the model pick despite {home_name}'s home-field adjustment."
+            ),
+        },
+        {
+            "title": "Yahoo Sports News",
+            "impact": 1,
+            "summary": "No major Yahoo Sports headline adjustment is currently applied to this MLB prediction.",
+        },
+    ]
+
+    risk = (
+        " Confidence is limited because the probable pitchers are not fully confirmed."
+        if not pitchers_confirmed
+        else ""
+    )
+    return {
+        "title": "Why SportsIntel Likes This Pick",
+        "factors": factors,
+        "summary": (
+            f"SportsIntel favors {winner} based primarily on season performance, "
+            f"with a small home-field adjustment.{risk}"
+        ),
+    }
+
+
 def _predict(game: dict) -> dict:
     away = game["teams"]["away"]
     home = game["teams"]["home"]
@@ -63,10 +126,21 @@ def _predict(game: dict) -> dict:
     if completed and away_score is not None and home_score is not None:
         actual_winner = home_name if home_score > away_score else away_name
 
+    away_pitcher = _pitcher(game, "away")
+    home_pitcher = _pitcher(game, "home")
     rec = recommendation(confidence)
+    confidence_details = _confidence_details(
+        winner=winner,
+        home_name=home_name,
+        away_name=away_name,
+        gap=gap,
+        away_pitcher=away_pitcher,
+        home_pitcher=home_pitcher,
+    )
 
     return {
         **rec,
+        "confidence_details": confidence_details,
         "game_id": f'mlb-{game["gamePk"]}',
         "away_team": away_name,
         "home_team": home_name,
@@ -80,8 +154,8 @@ def _predict(game: dict) -> dict:
         "win_probability": round(probability, 3),
         "away_record": _record(away.get("leagueRecord", {})),
         "home_record": _record(home.get("leagueRecord", {})),
-        "away_pitcher": _pitcher(game, "away"),
-        "home_pitcher": _pitcher(game, "home"),
+        "away_pitcher": away_pitcher,
+        "home_pitcher": home_pitcher,
         "confidence": confidence,
         "moneyline_pick": winner,
         "run_line_pick": f"{winner} -1.5",

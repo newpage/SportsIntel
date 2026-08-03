@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { getMlbGame, getMlb } from "../../../lib/api";
+import { ConfidenceDetails } from "../../../components/ConfidenceDetails";
 
 export default async function MlbGamePage({ params }: { params: Promise<{ gameId: string }> }) {
   const { gameId } = await params;
@@ -21,11 +22,12 @@ export default async function MlbGamePage({ params }: { params: Promise<{ gameId
             <div className="game-pick">{game.moneyline_pick}</div>
             <p className="game-probability">{Math.round(game.win_probability * 100)}% projected win probability</p>
           </div>
-          <div className="confidence-panel medium">
-            <span>Model confidence</span>
-            <strong>{game.confidence}%</strong>
-            <div className="confidence-track"><span style={{ width: `${game.confidence}%` }} /></div>
-          </div>
+          <ConfidenceDetails
+            confidence={game.confidence}
+            stars={game.stars}
+            recommendation={game.recommendation}
+            details={game.confidence_details}
+          />
         </section>
 
         <section className="mlb-detail-grid">
