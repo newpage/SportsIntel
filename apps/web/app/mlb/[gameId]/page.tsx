@@ -20,7 +20,14 @@ export default async function MlbGamePage({ params }: { params: Promise<{ gameId
             <div className="matchup">{game.away_team} at {game.home_team}</div>
             <div className="game-pick-label">SportsIntel moneyline pick</div>
             <div className="game-pick">{game.moneyline_pick}</div>
-            <p className="game-probability">{Math.round(game.win_probability * 100)}% projected win probability</p>
+            <p className="game-probability">
+              {Math.round(game.win_probability * 100)}% projected win probability
+              {game.confidence_change !== 0 && (
+                <span className={game.confidence_change > 0 ? "confidence-trend trend-up" : "confidence-trend trend-down"}>
+                  {game.confidence_change > 0 ? "▲" : "▼"} {Math.abs(game.confidence_change)}
+                </span>
+              )}
+            </p>
           </div>
           <ConfidenceDetails
             confidence={game.confidence}
@@ -62,6 +69,36 @@ export default async function MlbGamePage({ params }: { params: Promise<{ gameId
           <div className="market-card"><span>Run line</span><strong>{game.run_line_pick}</strong></div>
           <div className="market-card"><span>Total</span><strong>{game.total_pick}</strong></div>
         </section>
+
+        {game.prediction_timeline?.length > 0 && (
+          <section className="prediction-timeline-section">
+            <div className="eyebrow">Prediction history</div>
+            <h2>Prediction Timeline</h2>
+            <div className="prediction-timeline">
+              {game.prediction_timeline.map((event: any, index: number) => {
+                const nextEvent = game.prediction_timeline[index + 1];
+                const change = nextEvent ? event.confidence - nextEvent.confidence : 0;
+                return (
+                  <article className="prediction-timeline-event" key={`${event.timestamp}-${index}`}>
+                    <div className="prediction-timeline-marker" />
+                    <div>
+                      <div className="prediction-timeline-heading">
+                        <time>{new Date(event.timestamp).toLocaleString("en-US", { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" })}</time>
+                        <strong>{event.confidence}%</strong>
+                        {change !== 0 && (
+                          <span className={change > 0 ? "trend-up" : "trend-down"}>
+                            {change > 0 ? "▲" : "▼"} {Math.abs(change)}
+                          </span>
+                        )}
+                      </div>
+                      <p>{event.reason}</p>
+                    </div>
+                  </article>
+                );
+              })}
+            </div>
+          </section>
+        )}
 
         {home.latest_news.length > 0 && (
           <section className="game-news-section">

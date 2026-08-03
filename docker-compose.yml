@@ -3,6 +3,9 @@ services:
     build: ./apps/api
     environment:
       YAHOO_NFL_RSS_URL: ${YAHOO_NFL_RSS_URL:-https://sports.yahoo.com/nfl/rss/}
+      PREDICTION_HISTORY_FILE: /app/data/prediction_history.json
+    volumes:
+      - ./data:/app/data
     ports:
       - "127.0.0.1:${API_PORT:-8300}:8000"
 

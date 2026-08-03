@@ -5,6 +5,8 @@ import time
 import feedparser
 import httpx
 
+from app.prediction_history import attach_prediction_history
+
 
 SCHEDULE_URL = "https://statsapi.mlb.com/api/v1/schedule"
 YAHOO_MLB_RSS_URL = "https://sports.yahoo.com/mlb/rss/"
@@ -281,6 +283,7 @@ def mlb_home() -> dict:
         for game in day.get("games", [])
     ]
     games.sort(key=lambda game: game["start_time"])
+    attach_prediction_history(games)
 
     pick_of_day = max(
         games,

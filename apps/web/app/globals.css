@@ -277,3 +277,20 @@ button:focus-visible,a:focus-visible { outline:none; box-shadow:var(--focus-ring
   transform:none;
   will-change:auto;
 }
+
+/* Prediction timeline */
+.confidence-trend { display:inline-flex; align-items:center; margin-left:10px; padding:3px 7px; border-radius:999px; font-size:12px; font-weight:900; }
+.trend-up { color:var(--good); background:var(--soft-green); }
+.trend-down { color:var(--danger); background:#fff0ee; }
+.prediction-timeline-section { margin-top:30px; }
+.prediction-timeline { position:relative; display:grid; gap:0; margin-top:12px; }
+.prediction-timeline::before { content:""; position:absolute; top:14px; bottom:14px; left:7px; width:2px; background:var(--line); }
+.prediction-timeline-event { position:relative; display:grid; grid-template-columns:16px minmax(0,1fr); gap:14px; padding:0 0 20px; }
+.prediction-timeline-event:last-child { padding-bottom:0; }
+.prediction-timeline-marker { position:relative; z-index:1; width:16px; height:16px; margin-top:3px; border:4px solid #fff; border-radius:50%; background:var(--accent); box-shadow:0 0 0 1px var(--line); }
+.prediction-timeline-heading { display:flex; align-items:center; flex-wrap:wrap; gap:9px; }
+.prediction-timeline-heading time { color:var(--muted); font-size:13px; font-weight:700; }
+.prediction-timeline-heading strong { font-size:18px; }
+.prediction-timeline-heading span { padding:3px 7px; border-radius:999px; font-size:11px; font-weight:900; }
+.prediction-timeline-event p { margin:6px 0 0; color:var(--muted); line-height:1.45; }
+
