@@ -199,3 +199,63 @@ button { background:var(--accent); color:#ffffff; border:0; border-radius:10px; 
   .confidence-details-trigger.hero { text-align:left; }
   .confidence-modal { padding:22px; }
 }
+
+/* SportsIntel product polish */
+:root {
+  --shadow-sm:0 4px 14px rgba(16,36,62,.05);
+  --shadow-md:0 12px 32px rgba(16,36,62,.09);
+  --focus-ring:0 0 0 3px rgba(11,99,206,.16);
+}
+html { scroll-behavior:smooth; }
+body { line-height:1.45; }
+main { padding-top:30px; padding-bottom:48px; }
+header { padding-bottom:18px; border-bottom:1px solid rgba(217,226,236,.8); }
+.logo { letter-spacing:-.03em; }
+h1,h2,h3,.pick,.game-pick,.hero-pick-name,.saved-pick-name { letter-spacing:-.025em; }
+h2 { font-size:clamp(22px,3vw,30px); }
+.top-nav { flex-wrap:wrap; }
+.top-nav a { padding:7px 9px; border-radius:9px; transition:background .15s ease,color .15s ease; }
+.top-nav a:hover { background:var(--soft-blue); text-decoration:none; }
+.card { box-shadow:var(--shadow-sm); transition:transform .16s ease,border-color .16s ease,box-shadow .16s ease; }
+.card:hover { transform:translateY(-2px); border-color:#bdd5ee; box-shadow:var(--shadow-md); }
+button,.primary-button-link,.secondary-button,.danger-button { transition:transform .15s ease,box-shadow .15s ease,background .15s ease,border-color .15s ease; }
+button:hover,.primary-button-link:hover { transform:translateY(-1px); }
+button:focus-visible,a:focus-visible { outline:none; box-shadow:var(--focus-ring); }
+.primary-button-link:hover { text-decoration:none; box-shadow:0 9px 22px rgba(11,99,206,.22); }
+.hero-pick { padding:32px; border-radius:22px; box-shadow:0 14px 36px rgba(11,99,206,.08); }
+.hero-pick-reason { margin-top:4px; }
+.hero-confidence,.confidence-details-trigger.hero { min-height:180px; display:flex; flex-direction:column; justify-content:center; }
+.confidence-track span { transition:width .45s ease; }
+.rating-stars { letter-spacing:.06em; }
+.pick-of-day-badge { box-shadow:inset 0 0 0 1px rgba(122,86,0,.08); }
+.game-list .game { min-height:68px; padding:18px 20px; }
+.game-call { white-space:nowrap; }
+.mlb-link-card { min-height:320px; }
+.mlb-link-card .pick { line-height:1.08; }
+.breaking-impact { border-color:#efc7c0; background:linear-gradient(135deg,#fff 0%,#fff7f5 100%); }
+.market-card,.confidence-factor,.results-summary>div,.picks-summary>div { box-shadow:0 3px 10px rgba(16,36,62,.035); }
+.result-badge,.impact-badge,.pick-of-day-badge { white-space:nowrap; }
+.confidence-details-trigger { cursor:pointer; }
+.confidence-details-trigger:focus-visible { outline:none; box-shadow:var(--focus-ring); }
+.confidence-modal-backdrop { backdrop-filter:blur(4px); animation:fade-in .14s ease-out; }
+.confidence-modal { animation:modal-in .18s ease-out; }
+.confidence-modal-close:hover { background:#e2e8f0; transform:none; }
+.confidence-factor-heading strong { font-size:15px; }
+@keyframes fade-in { from { opacity:0; } to { opacity:1; } }
+@keyframes modal-in { from { opacity:0; transform:translateY(8px) scale(.985); } to { opacity:1; transform:none; } }
+@media (prefers-reduced-motion:reduce){ *,*::before,*::after{ scroll-behavior:auto!important; transition:none!important; animation:none!important; } }
+@media (max-width:760px){
+  main { padding-top:18px; padding-bottom:34px; }
+  header { margin-bottom:22px; padding-bottom:14px; }
+  .top-nav { gap:4px; }
+  .top-nav a { padding:6px 7px; }
+  .hero-pick { padding:22px; border-radius:18px; }
+  .hero-confidence,.confidence-details-trigger.hero { min-height:0; }
+  .game-list .game { width:100%; align-items:stretch; }
+  .game-call { white-space:normal; }
+  .results-summary { gap:8px; }
+  .results-summary>div { padding:13px 10px; }
+  .results-summary strong { font-size:26px; }
+  .confidence-modal-backdrop { align-items:end; padding:0; }
+  .confidence-modal { width:100%; max-height:88vh; border-radius:22px 22px 0 0; padding:22px 18px 28px; }
+}
