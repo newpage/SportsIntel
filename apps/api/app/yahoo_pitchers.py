@@ -75,51 +75,19 @@ def _game_contains_team(yahoo_game: dict, mlb_team_name: str) -> bool:
 def _clean_person_name(value: str | None) -> str | None:
     if not value:
         return None
-
     value = " ".join(value.split()).strip(" :-")
-    normalized = value.lower()
-
     if not value or value.upper() in {"TBD", "N/A", "NA"}:
         return None
-    if len(value) > 80:
+    if len(value) > 80 or not re.search(r"[A-Za-z]", value):
         return None
-    if normalized.startswith(("mlb.g.", "mlb.p.", "http://", "https://")):
-        return None
-    if normalized in {
-        "gamestarting_pitchers",
-        "starting_pitchers",
-        "away_pitcher",
-        "home_pitcher",
-    }:
-        return None
-    if "_" in value:
-        return None
-    if re.fullmatch(r"[a-z]+\.[a-z]+\.\d+", normalized):
-        return None
-
-    words = re.findall(r"[A-Za-zÀ-ÖØ-öø-ÿ'’-]+", value)
-    if len(words) < 2:
-        return None
-    if any(word.lower() in {"pitcher", "starting", "game", "home", "away"} for word in words):
-        return None
-
     return value
 
 
 def _name_from_mapping(value: Any) -> str | None:
-    if isinstance(value, str):
-        return _clean_person_name(value)
     if not isinstance(value, dict):
-        return None
+        return _clean_person_name(value) if isinstance(value, str) else None
 
-    # Yahoo uses several explicit name fields across scoreboard payload versions.
-    for key in (
-        "full_name",
-        "display_name",
-        "player_name",
-        "short_name",
-        "first_last",
-    ):
+    for key in ("full_name", "display_name", "player_name", "name", "short_name"):
         candidate = value.get(key)
         if isinstance(candidate, str):
             cleaned = _clean_person_name(candidate)
@@ -129,22 +97,18 @@ def _name_from_mapping(value: Any) -> str | None:
     first = value.get("first_name") or value.get("first")
     last = value.get("last_name") or value.get("last")
     if isinstance(first, str) and isinstance(last, str):
-        cleaned = _clean_person_name(f"{first} {last}")
-        if cleaned:
-            return cleaned
+        return _clean_person_name(f"{first} {last}")
 
-    # Only inspect known player containers. Do not recursively inspect arbitrary
-    # metadata because Yahoo game IDs and schema labels can resemble names.
-    for key in ("player", "athlete", "person", "player_data", "player_info"):
+    for key in ("player", "athlete", "person"):
         candidate = _name_from_mapping(value.get(key))
         if candidate:
             return candidate
 
-    # Some Yahoo entries use a generic "name" field. Accept it only after the
-    # strict human-name validation above.
-    candidate = value.get("name")
-    if isinstance(candidate, str):
-        return _clean_person_name(candidate)
+    for key, nested in value.items():
+        if "name" in str(key).lower():
+            candidate = _name_from_mapping(nested)
+            if candidate:
+                return candidate
 
     return None
 
@@ -197,7 +161,9 @@ def _extract_ordered_pitchers(yahoo_game: dict) -> tuple[dict, dict]:
     return {}, {}
 
 
-def _fetch_yahoo_scoreboard(target_date: date) -> tuple[list[dict], dict[str, dict]]:
+def _fetch_yahoo_scoreboard(
+    target_date: date,
+) -> tuple[list[dict], dict[str, dict], dict[str, dict]]:
     try:
         response = httpx.get(
             YAHOO_MLB_SCOREBOARD_API,
@@ -216,22 +182,40 @@ def _fetch_yahoo_scoreboard(target_date: date) -> tuple[list[dict], dict[str, di
         scoreboard = response.json().get("service", {}).get("scoreboard", {})
         games = scoreboard.get("games", {})
         byline = scoreboard.get("gamebyline", {})
+        players = scoreboard.get("players", {})
         return (
             [game for game in games.values() if isinstance(game, dict)],
             {str(key): value for key, value in byline.items() if isinstance(value, dict)},
+            {str(key): value for key, value in players.items() if isinstance(value, dict)},
         )
     except (httpx.HTTPError, ValueError, AttributeError):
-        return [], {}
+        return [], {}, {}
 
 
-def _merge_details(primary: dict, secondary: Any) -> dict:
+def _merge_details(
+    primary: dict,
+    secondary: Any,
+    players: dict[str, dict],
+) -> dict:
     secondary_details = _pitcher_details(secondary)
+    player_id = primary.get("player_id") or secondary_details.get("player_id")
+    player = players.get(str(player_id), {}) if player_id else {}
+
     return {
-        "name": primary.get("name") or secondary_details.get("name"),
-        "player_id": primary.get("player_id") or secondary_details.get("player_id"),
+        "name": (
+            primary.get("name")
+            or secondary_details.get("name")
+            or _clean_person_name(player.get("display_name"))
+        ),
+        "player_id": player_id,
         "stats": {
             **secondary_details.get("stats", {}),
             **primary.get("stats", {}),
+            **(
+                {"THROWS": str(player.get("throw"))}
+                if player.get("throw") not in (None, "")
+                else {}
+            ),
         },
     }
 
@@ -306,7 +290,7 @@ def _status(
 
 def apply_yahoo_probable_pitchers(games: list[dict]) -> None:
     """Fill missing pitchers and attach Yahoo pitcher stats without changing confidence."""
-    yahoo_games, game_byline = _fetch_yahoo_scoreboard(date.today())
+    yahoo_games, game_byline, players = _fetch_yahoo_scoreboard(date.today())
 
     for game in games:
         away_source = "mlb" if game.get("away_pitcher") else "unavailable"
@@ -328,8 +312,16 @@ def apply_yahoo_probable_pitchers(games: list[dict]) -> None:
             away_details, home_details = _extract_ordered_pitchers(matching_yahoo_game)
             yahoo_game_id = str(matching_yahoo_game.get("gameid", ""))
             byline = game_byline.get(yahoo_game_id, {})
-            away_details = _merge_details(away_details, byline.get("away_pitcher"))
-            home_details = _merge_details(home_details, byline.get("home_pitcher"))
+            away_details = _merge_details(
+                away_details,
+                byline.get("away_pitcher"),
+                players,
+            )
+            home_details = _merge_details(
+                home_details,
+                byline.get("home_pitcher"),
+                players,
+            )
 
             if not game.get("away_pitcher") and away_details.get("name"):
                 game["away_pitcher"] = away_details["name"]
