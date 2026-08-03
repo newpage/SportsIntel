@@ -294,3 +294,40 @@ button:focus-visible,a:focus-visible { outline:none; box-shadow:var(--focus-ring
 .prediction-timeline-heading span { padding:3px 7px; border-radius:999px; font-size:11px; font-weight:900; }
 .prediction-timeline-event p { margin:6px 0 0; color:var(--muted); line-height:1.45; }
 
+/* MLB home confidence movement */
+.home-trend {
+  display:inline-flex;
+  align-items:center;
+  width:max-content;
+  margin:2px 0 10px;
+  padding:5px 9px;
+  border-radius:999px;
+  font-size:12px;
+  font-weight:900;
+}
+.game-call {
+  display:inline-flex;
+  align-items:center;
+  gap:7px;
+}
+.game-call small {
+  display:inline-flex;
+  padding:3px 6px;
+  border-radius:999px;
+  font-size:11px;
+  font-weight:900;
+}
+.compact-confidence-row {
+  margin-top:6px;
+}
+.compact-confidence-row .home-trend {
+  margin:0;
+  padding:3px 7px;
+}
+@media (max-width:760px) {
+  .game-call {
+    width:100%;
+    justify-content:space-between;
+  }
+}
+

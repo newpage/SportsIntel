@@ -41,6 +41,11 @@ export default async function MlbPage() {
             <div className="rating-stars hero-rating-stars">{best.stars}</div>
             <div className="rating-label">{best.recommendation}</div>
             <div className="hero-pick-name">{best.moneyline_pick}</div>
+            {best.confidence_change !== 0 && (
+              <div className={best.confidence_change > 0 ? "home-trend trend-up" : "home-trend trend-down"}>
+                {best.confidence_change > 0 ? "▲" : "▼"} {Math.abs(best.confidence_change)} since last update
+              </div>
+            )}
             <div className="hero-pick-reason">{best.reasons[0]}</div>
           </div>
           <ConfidenceDetails
@@ -76,7 +81,15 @@ export default async function MlbPage() {
                   <strong>{index + 1}. {game.stars} {game.moneyline_pick}</strong>
                   <span className="subtle"> · {game.recommendation}</span>
                 </span>
-                <span className="game-call">{game.confidence}% →</span>
+                <span className="game-call">
+                  {game.confidence}%
+                  {game.confidence_change !== 0 && (
+                    <small className={game.confidence_change > 0 ? "trend-up" : "trend-down"}>
+                      {game.confidence_change > 0 ? "▲" : "▼"} {Math.abs(game.confidence_change)}
+                    </small>
+                  )}
+                  →
+                </span>
               </Link>
             ))}
           </div>
@@ -119,7 +132,14 @@ export default async function MlbPage() {
               <div className="confidence-track">
                 <span style={{ width: `${game.confidence}%` }} />
               </div>
-              <div className="confidence">{game.confidence}% confidence</div>
+              <div className="confidence-row compact-confidence-row">
+                <div className="confidence">{game.confidence}% confidence</div>
+                {game.confidence_change !== 0 && (
+                  <span className={game.confidence_change > 0 ? "home-trend trend-up" : "home-trend trend-down"}>
+                    {game.confidence_change > 0 ? "▲" : "▼"} {Math.abs(game.confidence_change)}
+                  </span>
+                )}
+              </div>
               <span className="primary-link">View game →</span>
             </Link>
           ))}
