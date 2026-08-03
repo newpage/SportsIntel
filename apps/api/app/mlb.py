@@ -6,6 +6,7 @@ import feedparser
 import httpx
 
 from app.prediction_history import attach_prediction_history
+from app.yahoo_pitchers import apply_yahoo_probable_pitchers
 
 
 SCHEDULE_URL = "https://statsapi.mlb.com/api/v1/schedule"
@@ -526,6 +527,7 @@ def mlb_home() -> dict:
         for day in payload.get("dates", [])
         for game in day.get("games", [])
     ]
+    apply_yahoo_probable_pitchers(games)
     games.sort(key=lambda game: game["start_time"])
     attach_prediction_history(games)
 
