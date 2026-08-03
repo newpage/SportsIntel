@@ -131,6 +131,95 @@ def _team_momentum(momentum: dict[int, dict], team_id: int) -> dict:
         },
     )
 
+
+_SPLITS_CACHE: tuple[float, dict[int, dict]] | None = None
+SPLITS_CACHE_SECONDS = 1800
+
+
+def _season_splits() -> dict[int, dict]:
+    global _SPLITS_CACHE
+    now = time.monotonic()
+    if _SPLITS_CACHE and _SPLITS_CACHE[0] > now:
+        return _SPLITS_CACHE[1]
+
+    end_date = date.today() - timedelta(days=1)
+    start_date = date(date.today().year, 3, 1)
+
+    response = httpx.get(
+        SCHEDULE_URL,
+        params={
+            "sportId": 1,
+            "startDate": start_date.isoformat(),
+            "endDate": end_date.isoformat(),
+        },
+        timeout=20,
+    )
+    response.raise_for_status()
+
+    raw: dict[int, dict] = {}
+    for day in response.json().get("dates", []):
+        for game in day.get("games", []):
+            if game.get("status", {}).get("abstractGameState") != "Final":
+                continue
+
+            away = game.get("teams", {}).get("away", {})
+            home = game.get("teams", {}).get("home", {})
+            away_score = away.get("score")
+            home_score = home.get("score")
+            away_id = away.get("team", {}).get("id")
+            home_id = home.get("team", {}).get("id")
+
+            if None in (away_score, home_score, away_id, home_id):
+                continue
+
+            away_won = away_score > home_score
+            raw.setdefault(
+                away_id,
+                {"home_wins": 0, "home_losses": 0, "away_wins": 0, "away_losses": 0},
+            )
+            raw.setdefault(
+                home_id,
+                {"home_wins": 0, "home_losses": 0, "away_wins": 0, "away_losses": 0},
+            )
+
+            if away_won:
+                raw[away_id]["away_wins"] += 1
+                raw[home_id]["home_losses"] += 1
+            else:
+                raw[away_id]["away_losses"] += 1
+                raw[home_id]["home_wins"] += 1
+
+    result: dict[int, dict] = {}
+    for team_id, values in raw.items():
+        home_games = values["home_wins"] + values["home_losses"]
+        away_games = values["away_wins"] + values["away_losses"]
+        result[team_id] = {
+            **values,
+            "home_record": f'{values["home_wins"]}-{values["home_losses"]}',
+            "away_record": f'{values["away_wins"]}-{values["away_losses"]}',
+            "home_pct": values["home_wins"] / home_games if home_games else 0.5,
+            "away_pct": values["away_wins"] / away_games if away_games else 0.5,
+        }
+
+    _SPLITS_CACHE = (now + SPLITS_CACHE_SECONDS, result)
+    return result
+
+
+def _team_split(splits: dict[int, dict], team_id: int) -> dict:
+    return splits.get(
+        team_id,
+        {
+            "home_wins": 0,
+            "home_losses": 0,
+            "away_wins": 0,
+            "away_losses": 0,
+            "home_record": "Unavailable",
+            "away_record": "Unavailable",
+            "home_pct": 0.5,
+            "away_pct": 0.5,
+        },
+    )
+
 def _record(record: dict) -> str:
     wins = record.get("wins")
     losses = record.get("losses")
@@ -146,6 +235,8 @@ def _confidence_details(
     home_pitcher: str | None,
     away_momentum: dict,
     home_momentum: dict,
+    away_split: dict,
+    home_split: dict,
 ) -> dict:
     record_impact = 5 if gap >= 0.15 else 4 if gap >= 0.08 else 3 if gap >= 0.04 else 2
     pitcher_status = _pitcher_status(away_pitcher, home_pitcher)
@@ -161,6 +252,8 @@ def _confidence_details(
         if away_momentum["win_pct"] > home_momentum["win_pct"]
         else None
     )
+    split_gap = abs(home_split["home_pct"] - away_split["away_pct"])
+    split_impact = 4 if split_gap >= 0.2 else 3 if split_gap >= 0.1 else 2
 
     factors = [
         {
@@ -184,6 +277,14 @@ def _confidence_details(
                     f"Recent form is even: {away_name} {away_momentum['record']} vs "
                     f"{home_name} {home_momentum['record']}."
                 )
+            ),
+        },
+        {
+            "title": "Home and Away Performance",
+            "impact": split_impact,
+            "summary": (
+                f"{home_name} is {home_split['home_record']} at home, while "
+                f"{away_name} is {away_split['away_record']} on the road."
             ),
         },
         {
@@ -239,12 +340,27 @@ def _predict(game: dict, momentum: dict[int, dict] | None = None) -> dict:
     momentum = momentum or {}
     away_momentum = _team_momentum(momentum, away_team_id)
     home_momentum = _team_momentum(momentum, home_team_id)
+    splits = _season_splits()
+    away_split = _team_split(splits, away_team_id)
+    home_split = _team_split(splits, home_team_id)
     momentum_adjustment = (home_momentum["win_pct"] - away_momentum["win_pct"]) * 0.025
+    split_adjustment = (home_split["home_pct"] - away_split["away_pct"]) * 0.02
 
-    adjusted_home = home_pct + 0.015 + momentum_adjustment
+    adjusted_home = home_pct + 0.015 + momentum_adjustment + split_adjustment
     winner = home_name if adjusted_home >= away_pct else away_name
     gap = abs(adjusted_home - away_pct)
-    confidence = round(min(88, max(55, 58 + gap * 95 + abs(momentum_adjustment) * 100)))
+    confidence = round(
+        min(
+            90,
+            max(
+                55,
+                58
+                + gap * 95
+                + abs(momentum_adjustment) * 100
+                + abs(split_adjustment) * 100,
+            ),
+        )
+    )
     probability = min(0.72, 0.52 + gap * 1.45)
 
     away_score = away.get("score")
@@ -267,6 +383,8 @@ def _predict(game: dict, momentum: dict[int, dict] | None = None) -> dict:
         home_pitcher=home_pitcher,
         away_momentum=away_momentum,
         home_momentum=home_momentum,
+        away_split=away_split,
+        home_split=home_split,
     )
 
     return {
@@ -287,6 +405,8 @@ def _predict(game: dict, momentum: dict[int, dict] | None = None) -> dict:
         "home_record": _record(home.get("leagueRecord", {})),
         "away_momentum": away_momentum,
         "home_momentum": home_momentum,
+        "away_split": away_split,
+        "home_split": home_split,
         "momentum_advantage": (
             home_name
             if home_momentum["win_pct"] > away_momentum["win_pct"]
@@ -307,6 +427,10 @@ def _predict(game: dict, momentum: dict[int, dict] | None = None) -> dict:
             (
                 f"Recent form: {away_name} {away_momentum['record']} "
                 f"vs {home_name} {home_momentum['record']}."
+            ),
+            (
+                f"Venue splits: {home_name} {home_split['home_record']} at home; "
+                f"{away_name} {away_split['away_record']} on the road."
             ),
             (
                 f"Probable pitchers: {away_pitcher or 'Not yet announced'} vs "

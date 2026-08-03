@@ -43,6 +43,11 @@ export default async function MlbGamePage({ params }: { params: Promise<{ gameId
             <strong>{game.away_momentum.record}</strong>
             <small>Last {game.away_momentum.games} completed games · {game.away_momentum.label}</small>
           </div>
+          <div className="market-card split-card">
+            <span>{game.away_team} road record</span>
+            <strong>{game.away_split.away_record}</strong>
+            <small>Season-to-date away performance</small>
+          </div>
           <div className="market-card">
             <span>Away team</span>
             <strong>{game.away_team}</strong>
@@ -58,6 +63,11 @@ export default async function MlbGamePage({ params }: { params: Promise<{ gameId
             <span>Home team</span>
             <strong>{game.home_team}</strong>
             <small>{game.home_record}</small>
+          </div>
+          <div className="market-card split-card">
+            <span>{game.home_team} home record</span>
+            <strong>{game.home_split.home_record}</strong>
+            <small>Season-to-date home performance</small>
           </div>
           <div className="market-card momentum-card">
             <span>{game.home_team} recent form</span>
