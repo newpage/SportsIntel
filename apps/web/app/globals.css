@@ -163,3 +163,6 @@ button { background:var(--accent); color:#ffffff; border:0; border-radius:10px; 
 .result-badge.loss { color:var(--danger); background:#fff0ee; }
 .result-badge.pending { color:#9a6b00; background:#fff8e8; }
 @media (max-width:760px){ .results-summary{grid-template-columns:repeat(3,1fr);} .result-row{grid-template-columns:1fr;} }
+
+.rating-stars{font-size:24px;color:#d4a017;font-weight:800;margin-top:8px}
+.rating-label{font-size:14px;font-weight:700;color:#0b63ce;margin:4px 0 8px}

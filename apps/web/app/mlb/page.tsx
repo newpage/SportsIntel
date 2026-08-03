@@ -68,7 +68,7 @@ export default async function MlbPage() {
           {data.games.map((game: any) => (
             <Link className="card mlb-link-card" key={game.game_id} href={`/mlb/${game.game_id}`}>
               <div className="kicker">{game.status}</div>
-              <div className="pick">{game.moneyline_pick}</div>
+              <div className="rating-stars">{game.stars}</div><div className="rating-label">{game.recommendation}</div><div className="pick">{game.moneyline_pick}</div>
               <p className="subtle">{game.away_team} at {game.home_team}</p>
               <p><strong>Run line:</strong> {game.run_line_pick}</p>
               <p><strong>Total:</strong> {game.total_pick}</p>

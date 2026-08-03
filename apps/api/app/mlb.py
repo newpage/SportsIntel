@@ -12,6 +12,18 @@ _CACHE: tuple[float, dict] | None = None
 CACHE_SECONDS = 300
 
 
+
+def recommendation(confidence: int) -> dict:
+    if confidence >= 85:
+        return {"rating":5,"stars":"★★★★★","recommendation":"Strong Bet","color":"green"}
+    if confidence >= 78:
+        return {"rating":4,"stars":"★★★★☆","recommendation":"Good Bet","color":"green"}
+    if confidence >= 70:
+        return {"rating":3,"stars":"★★★☆☆","recommendation":"Worth Considering","color":"yellow"}
+    if confidence >= 60:
+        return {"rating":2,"stars":"★★☆☆☆","recommendation":"Risky","color":"orange"}
+    return {"rating":1,"stars":"★☆☆☆☆","recommendation":"Stay Away","color":"red"}
+
 def _pct(record: dict) -> float:
     try:
         return float(record.get("pct", ".500"))
@@ -51,7 +63,10 @@ def _predict(game: dict) -> dict:
     if completed and away_score is not None and home_score is not None:
         actual_winner = home_name if home_score > away_score else away_name
 
+    rec = recommendation(confidence)
+
     return {
+        **rec,
         "game_id": f'mlb-{game["gamePk"]}',
         "away_team": away_name,
         "home_team": home_name,
