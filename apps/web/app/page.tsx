@@ -1,14 +1,22 @@
 import Link from "next/link";
 import { getHome } from "../lib/api";
 
+function ConfidenceBar({ value }: { value: number }) {
+  return <div className="confidence-track"><span style={{ width: `${value}%` }} /></div>;
+}
+
 function PickCard({ title, pick, confidence, why, href }: any) {
   return (
-    <article className="card">
+    <article className="card recommendation-card">
       <div className="kicker">{title}</div>
       <div className="pick">{pick}</div>
-      <div className="confidence">{confidence}% confidence</div>
+      <div className="confidence-row">
+        <strong>{confidence}%</strong>
+        <span>confidence</span>
+      </div>
+      <ConfidenceBar value={confidence} />
       <div className="reason">{why}</div>
-      <p><Link href={href}>Why →</Link></p>
+      <Link className="primary-link" href={href}>Why this pick →</Link>
     </article>
   );
 }
@@ -19,8 +27,13 @@ export default async function HomePage() {
     <main>
       <header>
         <div><div className="logo">SportsIntel</div><div className="subtle">NFL Week {data.week}</div></div>
-        <div className="subtle">Make your picks in under a minute.</div>
+        <nav className="top-nav"><Link href="/my-picks">My Picks</Link></nav>
       </header>
+
+      <section className="hero-copy">
+        <h1>Make your NFL decisions in under a minute.</h1>
+        <p className="subtle">One clear pick, one confidence score, and the reasons that matter.</p>
+      </section>
 
       <section className="grid">
         <PickCard title="Best Survivor" pick={data.best_survivor.winner} confidence={data.best_survivor.confidence} why={data.best_survivor.reasons[0]} href={`/games/${data.best_survivor.game_id}`} />
@@ -29,11 +42,11 @@ export default async function HomePage() {
       </section>
 
       <section className="games">
-        <h2>Today's Games</h2>
+        <div className="section-heading"><h2>Today's Games</h2><span className="subtle">Tap any matchup for the full decision.</span></div>
         {data.games.map((game: any) => (
           <Link className="card game" key={game.game_id} href={`/games/${game.game_id}`}>
-            <span>{game.away_team} at {game.home_team}</span>
-            <strong>{game.winner} · {game.confidence}%</strong>
+            <span><strong>{game.away_team}</strong> at <strong>{game.home_team}</strong></span>
+            <span>{game.winner} · {game.confidence}% →</span>
           </Link>
         ))}
       </section>
