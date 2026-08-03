@@ -75,42 +75,28 @@ def _game_contains_team(yahoo_game: dict, mlb_team_name: str) -> bool:
 def _clean_person_name(value: str | None) -> str | None:
     if not value:
         return None
+
     value = " ".join(value.split()).strip(" :-")
+    normalized = value.lower()
+
     if not value or value.upper() in {"TBD", "N/A", "NA"}:
         return None
-    if len(value) > 80 or not re.search(r"[A-Za-z]", value):
+    if len(value) > 80:
         return None
-    return value
+    if normalized.startswith(("mlb.g.", "mlb.p.", "http://", "https://")):
+        return None
+    if normalized in {
+        "gamestarting_pitchers",
+        "starting_pitchers",
+        "away_pitcher",
+        "home_pitcher",
+    }:
+        return None
+    if "_" in value:
+        return None
 
-
-def _name_from_mapping(value: Any) -> str | None:
-    if not isinstance(value, dict):
-        return _clean_person_name(value) if isinstance(value, str) else None
-
-    for key in ("full_name", "display_name", "player_name", "name", "short_name"):
-        candidate = value.get(key)
-        if isinstance(candidate, str):
-            cleaned = _clean_person_name(candidate)
-            if cleaned:
-                return cleaned
-
-    first = value.get("first_name") or value.get("first")
-    last = value.get("last_name") or value.get("last")
-    if isinstance(first, str) and isinstance(last, str):
-        return _clean_person_name(f"{first} {last}")
-
-    for key in ("player", "athlete", "person"):
-        candidate = _name_from_mapping(value.get(key))
-        if candidate:
-            return candidate
-
-    for key, nested in value.items():
-        if "name" in str(key).lower():
-            candidate = _name_from_mapping(nested)
-            if candidate:
-                return candidate
-
-    return None
+    words = re.findall(r"[A-Za-zÀ-ÖØ-öø-ÿ'’-]+", value)
+    return value if len(words) >= 2 else None
 
 
 def _stats_from_mapping(value: Any) -> dict[str, str]:
@@ -128,37 +114,7 @@ def _stats_from_mapping(value: Any) -> dict[str, str]:
             if key and stat_value not in (None, ""):
                 stats[key] = str(stat_value)
 
-    for key in ("era", "whip", "wins", "losses", "record", "handedness", "throws"):
-        raw = value.get(key)
-        if raw not in (None, ""):
-            stats[key.upper()] = str(raw)
-
     return stats
-
-
-def _pitcher_details(value: Any) -> dict:
-    if not isinstance(value, dict):
-        return {"name": _name_from_mapping(value), "stats": {}}
-
-    return {
-        "name": _name_from_mapping(value),
-        "player_id": value.get("player_id") or value.get("id"),
-        "stats": _stats_from_mapping(value),
-    }
-
-
-def _extract_ordered_pitchers(yahoo_game: dict) -> tuple[dict, dict]:
-    raw = yahoo_game.get("starting_pitchers")
-    if not isinstance(raw, list):
-        return {}, {}
-
-    details = [_pitcher_details(item) for item in raw]
-    details = [item for item in details if item.get("name")]
-    if len(details) >= 2:
-        return details[0], details[1]
-    if len(details) == 1:
-        return details[0], {}
-    return {}, {}
 
 
 def _fetch_yahoo_scoreboard(
@@ -180,9 +136,11 @@ def _fetch_yahoo_scoreboard(
         )
         response.raise_for_status()
         scoreboard = response.json().get("service", {}).get("scoreboard", {})
+
         games = scoreboard.get("games", {})
         byline = scoreboard.get("gamebyline", {})
         players = scoreboard.get("players", {})
+
         return (
             [game for game in games.values() if isinstance(game, dict)],
             {str(key): value for key, value in byline.items() if isinstance(value, dict)},
@@ -192,31 +150,21 @@ def _fetch_yahoo_scoreboard(
         return [], {}, {}
 
 
-def _merge_details(
-    primary: dict,
-    secondary: Any,
-    players: dict[str, dict],
-) -> dict:
-    secondary_details = _pitcher_details(secondary)
-    player_id = primary.get("player_id") or secondary_details.get("player_id")
+def _pitcher_details(byline_pitcher: Any, players: dict[str, dict]) -> dict:
+    if not isinstance(byline_pitcher, dict):
+        return {"name": None, "player_id": None, "stats": {}}
+
+    player_id = byline_pitcher.get("player_id")
     player = players.get(str(player_id), {}) if player_id else {}
+    stats = _stats_from_mapping(byline_pitcher)
+
+    if player.get("throw") not in (None, ""):
+        stats["THROWS"] = str(player["throw"])
 
     return {
-        "name": (
-            primary.get("name")
-            or secondary_details.get("name")
-            or _clean_person_name(player.get("display_name"))
-        ),
+        "name": _clean_person_name(player.get("display_name")),
         "player_id": player_id,
-        "stats": {
-            **secondary_details.get("stats", {}),
-            **primary.get("stats", {}),
-            **(
-                {"THROWS": str(player.get("throw"))}
-                if player.get("throw") not in (None, "")
-                else {}
-            ),
-        },
+        "stats": stats,
     }
 
 
@@ -232,18 +180,14 @@ def _stat_value(details: dict, *names: str) -> str | None:
 def _display_stats(details: dict) -> dict:
     wins = _stat_value(details, "W", "WINS")
     losses = _stat_value(details, "L", "LOSSES")
-    record = _stat_value(details, "RECORD")
-    if not record and wins is not None and losses is not None:
-        record = f"{wins}-{losses}"
+    record = f"{wins}-{losses}" if wins is not None and losses is not None else None
 
     return {
         "record": record,
         "era": _stat_value(details, "ERA"),
         "whip": _stat_value(details, "WHIP"),
-        "throws": _stat_value(details, "THROWS", "HANDEDNESS"),
+        "throws": _stat_value(details, "THROWS"),
     }
-
-
 
 
 def _as_float(value: str | None) -> float | None:
@@ -262,17 +206,11 @@ def _record_win_pct(record: str | None) -> float | None:
         losses = int(losses_text)
     except (TypeError, ValueError):
         return None
-
     games = wins + losses
     return wins / games if games else None
 
 
-def _pitcher_advantage(
-    away_team: str,
-    home_team: str,
-    away_stats: dict,
-    home_stats: dict,
-) -> dict:
+def _pitcher_advantage(away_team: str, home_team: str, away_stats: dict, home_stats: dict) -> dict:
     away_era = _as_float(away_stats.get("era"))
     home_era = _as_float(home_stats.get("era"))
     away_win_pct = _record_win_pct(away_stats.get("record"))
@@ -286,27 +224,19 @@ def _pitcher_advantage(
         era_gap = abs(away_era - home_era)
         if away_era < home_era:
             away_score += min(3.0, era_gap)
-            reasons.append(
-                f"{away_team} has the lower starter ERA: {away_era:.2f} vs {home_era:.2f}."
-            )
+            reasons.append(f"{away_team} has the lower starter ERA: {away_era:.2f} vs {home_era:.2f}.")
         elif home_era < away_era:
             home_score += min(3.0, era_gap)
-            reasons.append(
-                f"{home_team} has the lower starter ERA: {home_era:.2f} vs {away_era:.2f}."
-            )
+            reasons.append(f"{home_team} has the lower starter ERA: {home_era:.2f} vs {away_era:.2f}.")
 
     if away_win_pct is not None and home_win_pct is not None:
         record_gap = abs(away_win_pct - home_win_pct)
         if away_win_pct > home_win_pct:
             away_score += record_gap
-            reasons.append(
-                f"{away_team} has the stronger starter win rate based on the available record."
-            )
+            reasons.append(f"{away_team} has the stronger starter win rate.")
         elif home_win_pct > away_win_pct:
             home_score += record_gap
-            reasons.append(
-                f"{home_team} has the stronger starter win rate based on the available record."
-            )
+            reasons.append(f"{home_team} has the stronger starter win rate.")
 
     difference = abs(away_score - home_score)
     if difference < 0.15:
@@ -334,30 +264,26 @@ def _source_label(away_source: str, home_source: str) -> str:
     if sources == {"mlb"}:
         return "MLB"
     if sources == {"yahoo"}:
-        return "Yahoo Sports fallback"
+        return "Yahoo Sports"
     if "yahoo" in sources and "mlb" in sources:
         return "MLB + Yahoo Sports"
     if "yahoo" in sources:
-        return "Yahoo Sports fallback"
+        return "Yahoo Sports"
     if "mlb" in sources:
         return "MLB"
     return "Unavailable"
 
 
-def _status(
-    away_pitcher: str | None,
-    home_pitcher: str | None,
-    used_yahoo: bool,
-) -> dict:
+def _status(away_pitcher: str | None, home_pitcher: str | None, used_yahoo: bool) -> dict:
     count = int(bool(away_pitcher)) + int(bool(home_pitcher))
     if count == 2:
         return {
             "code": "probable" if used_yahoo else "confirmed",
             "label": "Probable" if used_yahoo else "Confirmed",
             "message": (
-                "Both probable starters are available; at least one is supplied by Yahoo Sports."
+                "Both probable starters are available from MLB and/or Yahoo Sports."
                 if used_yahoo
-                else "Both probable starting pitchers have been announced."
+                else "Both probable starting pitchers have been announced by MLB."
             ),
         }
     if count == 1:
@@ -374,14 +300,16 @@ def _status(
 
 
 def apply_yahoo_probable_pitchers(games: list[dict]) -> None:
-    """Fill missing pitchers and attach Yahoo pitcher stats without changing confidence."""
+    """Fill missing pitchers and attach Yahoo stats without changing confidence."""
     yahoo_games, game_byline, players = _fetch_yahoo_scoreboard(date.today())
 
     for game in games:
         away_source = "mlb" if game.get("away_pitcher") else "unavailable"
         home_source = "mlb" if game.get("home_pitcher") else "unavailable"
-        away_details: dict = {}
-        home_details: dict = {}
+
+        away_details = {"name": None, "player_id": None, "stats": {}}
+        home_details = {"name": None, "player_id": None, "stats": {}}
+        matched_game_id: str | None = None
 
         matching_yahoo_game = next(
             (
@@ -394,19 +322,11 @@ def apply_yahoo_probable_pitchers(games: list[dict]) -> None:
         )
 
         if matching_yahoo_game:
-            away_details, home_details = _extract_ordered_pitchers(matching_yahoo_game)
-            yahoo_game_id = str(matching_yahoo_game.get("gameid", ""))
-            byline = game_byline.get(yahoo_game_id, {})
-            away_details = _merge_details(
-                away_details,
-                byline.get("away_pitcher"),
-                players,
-            )
-            home_details = _merge_details(
-                home_details,
-                byline.get("home_pitcher"),
-                players,
-            )
+            matched_game_id = str(matching_yahoo_game.get("gameid", ""))
+            byline = game_byline.get(matched_game_id, {})
+
+            away_details = _pitcher_details(byline.get("away_pitcher"), players)
+            home_details = _pitcher_details(byline.get("home_pitcher"), players)
 
             if not game.get("away_pitcher") and away_details.get("name"):
                 game["away_pitcher"] = away_details["name"]
@@ -432,3 +352,10 @@ def apply_yahoo_probable_pitchers(games: list[dict]) -> None:
             game.get("home_pitcher"),
             "yahoo" in {away_source, home_source},
         )
+        game["pitcher_data_diagnostics"] = {
+            "yahoo_game_id": matched_game_id,
+            "away_player_id": away_details.get("player_id"),
+            "home_player_id": home_details.get("player_id"),
+            "yahoo_game_matched": bool(matched_game_id),
+            "yahoo_players_loaded": len(players),
+        }
