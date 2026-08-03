@@ -112,6 +112,24 @@ export default async function MlbGamePage({ params }: { params: Promise<{ gameId
                 </div>
               </div>
             </div>
+            {game.pitcher_advantage && (
+              <div className="pitcher-advantage-card">
+                <div>
+                  <span>SportsIntel pitcher edge</span>
+                  <strong>
+                    {game.pitcher_advantage.team
+                      ? `${game.pitcher_advantage.team} · ${game.pitcher_advantage.label}`
+                      : "Even matchup"}
+                  </strong>
+                </div>
+                <p>{game.pitcher_advantage.summary}</p>
+                <ul>
+                  {game.pitcher_advantage.reasons.map((reason: string) => (
+                    <li key={reason}>{reason}</li>
+                  ))}
+                </ul>
+              </div>
+            )}
             <p className="subtle">Displayed for comparison only; pitcher statistics do not change confidence yet.</p>
           </section>
         )}

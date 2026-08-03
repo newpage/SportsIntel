@@ -244,6 +244,91 @@ def _display_stats(details: dict) -> dict:
     }
 
 
+
+
+def _as_float(value: str | None) -> float | None:
+    try:
+        return float(value) if value not in (None, "") else None
+    except (TypeError, ValueError):
+        return None
+
+
+def _record_win_pct(record: str | None) -> float | None:
+    if not record or "-" not in record:
+        return None
+    try:
+        wins_text, losses_text = record.split("-", 1)
+        wins = int(wins_text)
+        losses = int(losses_text)
+    except (TypeError, ValueError):
+        return None
+
+    games = wins + losses
+    return wins / games if games else None
+
+
+def _pitcher_advantage(
+    away_team: str,
+    home_team: str,
+    away_stats: dict,
+    home_stats: dict,
+) -> dict:
+    away_era = _as_float(away_stats.get("era"))
+    home_era = _as_float(home_stats.get("era"))
+    away_win_pct = _record_win_pct(away_stats.get("record"))
+    home_win_pct = _record_win_pct(home_stats.get("record"))
+
+    away_score = 0.0
+    home_score = 0.0
+    reasons: list[str] = []
+
+    if away_era is not None and home_era is not None:
+        era_gap = abs(away_era - home_era)
+        if away_era < home_era:
+            away_score += min(3.0, era_gap)
+            reasons.append(
+                f"{away_team} has the lower starter ERA: {away_era:.2f} vs {home_era:.2f}."
+            )
+        elif home_era < away_era:
+            home_score += min(3.0, era_gap)
+            reasons.append(
+                f"{home_team} has the lower starter ERA: {home_era:.2f} vs {away_era:.2f}."
+            )
+
+    if away_win_pct is not None and home_win_pct is not None:
+        record_gap = abs(away_win_pct - home_win_pct)
+        if away_win_pct > home_win_pct:
+            away_score += record_gap
+            reasons.append(
+                f"{away_team} has the stronger starter win rate based on the available record."
+            )
+        elif home_win_pct > away_win_pct:
+            home_score += record_gap
+            reasons.append(
+                f"{home_team} has the stronger starter win rate based on the available record."
+            )
+
+    difference = abs(away_score - home_score)
+    if difference < 0.15:
+        leader = None
+        label = "Even"
+        summary = "Available pitcher statistics do not show a meaningful edge."
+    else:
+        leader = away_team if away_score > home_score else home_team
+        label = "Strong" if difference >= 1.5 else "Moderate" if difference >= 0.6 else "Slight"
+        summary = f"{leader} has a {label.lower()} starting-pitcher advantage."
+
+    return {
+        "team": leader,
+        "label": label,
+        "away_score": round(away_score, 2),
+        "home_score": round(home_score, 2),
+        "summary": summary,
+        "reasons": reasons or ["Insufficient pitcher statistics for a reliable comparison."],
+        "used_in_confidence": False,
+    }
+
+
 def _source_label(away_source: str, home_source: str) -> str:
     sources = {away_source, home_source}
     if sources == {"mlb"}:
@@ -336,6 +421,12 @@ def apply_yahoo_probable_pitchers(games: list[dict]) -> None:
         game["pitcher_source_label"] = _source_label(away_source, home_source)
         game["away_pitcher_stats"] = _display_stats(away_details)
         game["home_pitcher_stats"] = _display_stats(home_details)
+        game["pitcher_advantage"] = _pitcher_advantage(
+            game["away_team"],
+            game["home_team"],
+            game["away_pitcher_stats"],
+            game["home_pitcher_stats"],
+        )
         game["pitcher_status"] = _status(
             game.get("away_pitcher"),
             game.get("home_pitcher"),

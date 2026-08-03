@@ -366,3 +366,41 @@ button:focus-visible,a:focus-visible { outline:none; box-shadow:var(--focus-ring
   margin-top:3px;
   font-size:17px;
 }
+
+/* MLB pitcher advantage */
+.pitcher-advantage-card {
+  margin-top:16px;
+  padding:16px 18px;
+  border:1px solid var(--line);
+  border-radius:16px;
+  background:var(--surface-soft);
+}
+.pitcher-advantage-card > div {
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap:12px;
+  flex-wrap:wrap;
+}
+.pitcher-advantage-card span {
+  color:var(--muted);
+  font-size:12px;
+  font-weight:800;
+  text-transform:uppercase;
+  letter-spacing:.05em;
+}
+.pitcher-advantage-card strong {
+  font-size:18px;
+}
+.pitcher-advantage-card p {
+  margin:10px 0 8px;
+}
+.pitcher-advantage-card ul {
+  margin:0;
+  padding-left:20px;
+  color:var(--muted);
+}
+.pitcher-advantage-card li + li {
+  margin-top:4px;
+}
+
