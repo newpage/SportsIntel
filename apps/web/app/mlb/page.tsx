@@ -131,15 +131,22 @@ export default async function MlbPage() {
           <div className="section-heading">
             <div>
               <div className="eyebrow">Only news source</div>
-              <h2>Yahoo MLB News</h2>
+              <h2>Yahoo MLB News Impact</h2>
             </div>
+            <span className="subtle">
+              Headline screening only; confidence is not automatically changed.
+            </span>
           </div>
-          <ul className="news-list">
+          <ul className="news-list detailed-news">
             {data.latest_news.map((item: any) => (
               <li key={item.link}>
                 <a href={item.link} target="_blank" rel="noreferrer">
                   {item.title}
                 </a>
+                <span className={`impact-${item.impact}`}>
+                  {item.impact_label}
+                </span>
+                <p className="subtle">{item.decision_note}</p>
               </li>
             ))}
           </ul>

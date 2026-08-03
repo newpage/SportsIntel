@@ -196,17 +196,70 @@ def _predict(game: dict) -> dict:
     }
 
 
+NEGATIVE_NEWS_TERMS = (
+    "injury",
+    "injured",
+    "scratched",
+    "suspended",
+    "illness",
+    "setback",
+    "placed on il",
+    "injured list",
+    "shoulder",
+    "elbow",
+    "hamstring",
+)
+
+POSITIVE_NEWS_TERMS = (
+    "returns",
+    "activated",
+    "cleared",
+    "healthy",
+    "reinstated",
+    "available",
+    "confirmed",
+)
+
+
+def _classify_news(title: str) -> dict:
+    normalized = title.lower()
+    if any(term in normalized for term in NEGATIVE_NEWS_TERMS):
+        return {
+            "impact": "negative",
+            "impact_label": "Potential concern",
+            "decision_note": "Review this update before relying on today's prediction.",
+        }
+    if any(term in normalized for term in POSITIVE_NEWS_TERMS):
+        return {
+            "impact": "positive",
+            "impact_label": "Positive update",
+            "decision_note": "This may reduce uncertainty around today's games.",
+        }
+    return {
+        "impact": "neutral",
+        "impact_label": "General update",
+        "decision_note": "No direct prediction adjustment is currently applied.",
+    }
+
+
 def _news() -> list[dict]:
     feed = feedparser.parse(os.getenv("YAHOO_MLB_RSS_URL", YAHOO_MLB_RSS_URL))
-    return [
-        {
-            "title": entry.get("title", "MLB update"),
-            "link": entry.get("link", ""),
-            "published": entry.get("published"),
-        }
-        for entry in feed.entries[:6]
-    ]
+    items = []
+    for entry in feed.entries[:8]:
+        title = entry.get("title", "MLB update")
+        items.append(
+            {
+                "title": title,
+                "link": entry.get("link", ""),
+                "published": entry.get("published"),
+                **_classify_news(title),
+            }
+        )
 
+    return sorted(
+        items,
+        key=lambda item: {"negative": 0, "positive": 1, "neutral": 2}[item["impact"]],
+    )[:6]
 
 def mlb_home() -> dict:
     global _CACHE
