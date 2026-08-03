@@ -44,12 +44,23 @@ def _predict(game: dict) -> dict:
     confidence = round(min(84, 58 + gap * 95))
     probability = min(0.72, 0.52 + gap * 1.45)
 
+    away_score = away.get("score")
+    home_score = home.get("score")
+    completed = game["status"].get("abstractGameState") == "Final"
+    actual_winner = None
+    if completed and away_score is not None and home_score is not None:
+        actual_winner = home_name if home_score > away_score else away_name
+
     return {
         "game_id": f'mlb-{game["gamePk"]}',
         "away_team": away_name,
         "home_team": home_name,
         "start_time": game["gameDate"],
         "status": game["status"]["detailedState"],
+        "completed": completed,
+        "away_score": away_score,
+        "home_score": home_score,
+        "actual_winner": actual_winner,
         "winner": winner,
         "win_probability": round(probability, 3),
         "away_record": _record(away.get("leagueRecord", {})),

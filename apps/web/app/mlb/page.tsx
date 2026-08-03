@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { getMlb } from "../../lib/api";
+import { MlbPredictionSnapshot } from "../../components/MlbPredictionSnapshot";
 
 export default async function MlbPage() {
   const data = await getMlb();
@@ -15,9 +16,12 @@ export default async function MlbPage() {
         <nav className="top-nav">
           <Link href="/">NFL</Link>
           <Link href="/mlb">MLB</Link>
+          <Link href="/mlb/results">Results</Link>
           <Link href="/my-picks">My Picks</Link>
         </nav>
       </header>
+
+      <MlbPredictionSnapshot date={data.date} games={data.games} />
 
       <section className="home-intro">
         <div>

@@ -150,3 +150,16 @@ button { background:var(--accent); color:#ffffff; border:0; border-radius:10px; 
 .mlb-link-card .primary-link { margin-top:auto; padding-top:16px; }
 .mlb-detail-grid { display:grid; grid-template-columns:repeat(3,1fr); gap:12px; margin-top:24px; }
 @media (max-width:760px){ .mlb-detail-grid{grid-template-columns:1fr;} }
+.results-summary { display:grid; grid-template-columns:repeat(3,1fr); gap:12px; margin-bottom:20px; }
+.results-summary > div { padding:18px; border:1px solid var(--line); border-radius:14px; background:#ffffff; }
+.results-summary strong { display:block; color:var(--accent); font-size:32px; }
+.results-summary span { color:var(--muted); font-size:13px; }
+.results-list { display:grid; gap:12px; }
+.result-row { display:grid; grid-template-columns:minmax(0,1fr) auto auto; align-items:center; gap:20px; }
+.result-row h3 { margin:8px 0; }
+.result-score { font-size:22px; font-weight:900; }
+.result-badge { min-width:78px; padding:8px 10px; border-radius:999px; text-align:center; font-size:12px; font-weight:900; }
+.result-badge.win { color:var(--good); background:var(--soft-green); }
+.result-badge.loss { color:var(--danger); background:#fff0ee; }
+.result-badge.pending { color:#9a6b00; background:#fff8e8; }
+@media (max-width:760px){ .results-summary{grid-template-columns:repeat(3,1fr);} .result-row{grid-template-columns:1fr;} }
