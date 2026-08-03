@@ -15,18 +15,22 @@ TEAM_ALIASES = {
     "Los Angeles Chargers": ("los angeles chargers", "chargers", "la chargers"),
 }
 
-NEGATIVE_TERMS = (
+SEVERE_NEGATIVE_TERMS = (
     "ruled out",
-    "out for",
-    "injured",
-    "injury",
+    "will miss",
     "placed on ir",
     "injured reserve",
     "suspended",
-    "questionable",
+    "season-ending",
+    "out for season",
+)
+MODERATE_NEGATIVE_TERMS = (
     "doubtful",
+    "questionable",
     "limited in practice",
-    "will miss",
+    "did not practice",
+    "injured",
+    "injury",
 )
 POSITIVE_TERMS = (
     "activated",
@@ -39,19 +43,67 @@ POSITIVE_TERMS = (
     "expected to play",
 )
 
+POSITION_TERMS = {
+    "QUARTERBACK": ("quarterback", " qb ", "starting qb", "signal-caller"),
+    "OFFENSIVE_LINE": (
+        "offensive line",
+        "left tackle",
+        "right tackle",
+        "left guard",
+        "right guard",
+        "center",
+    ),
+    "DEFENSE": (
+        "cornerback",
+        "linebacker",
+        "defensive end",
+        "defensive tackle",
+        "safety",
+        "pass rusher",
+    ),
+}
+
 _CACHE: tuple[float, list[NewsItem]] | None = None
 CACHE_SECONDS = 900
 
 
-def _classify(title: str) -> tuple[str, int]:
-    lowered = title.lower()
-    if any(term in lowered for term in NEGATIVE_TERMS):
-        return "INJURY", -3
-    if any(term in lowered for term in POSITIVE_TERMS):
-        return "AVAILABILITY", 2
+def _category(title: str) -> str:
+    lowered = f" {title.lower()} "
+    for category, terms in POSITION_TERMS.items():
+        if any(term in lowered for term in terms):
+            return category
+    if any(term in lowered for term in ("coach", "coordinator", "play-caller")):
+        return "COACHING"
+    if any(term in lowered for term in ("suspended", "suspension")):
+        return "SUSPENSION"
     if any(term in lowered for term in ("trade", "signs", "waived", "released", "roster")):
-        return "ROSTER", 0
-    return "TEAM_NEWS", 0
+        return "ROSTER"
+    return "TEAM_NEWS"
+
+
+def _impact(title: str, category: str) -> int:
+    lowered = title.lower()
+
+    if any(term in lowered for term in SEVERE_NEGATIVE_TERMS):
+        base = -4
+    elif any(term in lowered for term in MODERATE_NEGATIVE_TERMS):
+        base = -2
+    elif any(term in lowered for term in POSITIVE_TERMS):
+        base = 2
+    else:
+        base = 0
+
+    if base and category == "QUARTERBACK":
+        base += -1 if base < 0 else 1
+    elif base and category == "OFFENSIVE_LINE":
+        base += -1 if base < 0 else 0
+
+    return max(-5, min(4, base))
+
+
+def _classify(title: str) -> tuple[str, int]:
+    category = _category(title)
+    return category, _impact(title, category)
 
 
 def _matched_team(title: str) -> str | None:
@@ -96,9 +148,10 @@ def fetch_yahoo_nfl_news() -> list[NewsItem]:
 
 def news_for_teams(away_team: str, home_team: str) -> list[NewsItem]:
     teams = {away_team, home_team}
-    return [item for item in fetch_yahoo_nfl_news() if item.matched_team in teams][:5]
+    matched = [item for item in fetch_yahoo_nfl_news() if item.matched_team in teams]
+    return sorted(matched, key=lambda item: abs(item.impact), reverse=True)[:5]
 
 
 def team_news_impact(team: str, items: list[NewsItem]) -> int:
     impact = sum(item.impact for item in items if item.matched_team == team)
-    return max(-6, min(6, impact))
+    return max(-7, min(7, impact))
