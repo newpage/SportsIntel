@@ -5,6 +5,9 @@ class NewsItem(BaseModel):
     title: str
     link: str
     published: str | None = None
+    category: str = "TEAM_NEWS"
+    impact: int = Field(default=0, ge=-5, le=5)
+    matched_team: str | None = None
 
 
 class Prediction(BaseModel):
@@ -22,4 +25,5 @@ class Prediction(BaseModel):
     spread_pick: str
     total_pick: str
     reasons: list[str]
-    news: list[NewsItem] = []
+    news: list[NewsItem] = Field(default_factory=list)
+    news_impact: int = 0

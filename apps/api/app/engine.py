@@ -1,5 +1,5 @@
 from app.models import Prediction
-from app.news import news_for_teams
+from app.news import news_for_teams, team_news_impact
 
 
 GAMES = [
@@ -37,11 +37,19 @@ GAMES = [
 
 
 def predict(game: dict) -> Prediction:
-    rating_gap = game["home_rating"] - game["away_rating"]
+    news = news_for_teams(game["away_team"], game["home_team"])
+    home_news_impact = team_news_impact(game["home_team"], news)
+    away_news_impact = team_news_impact(game["away_team"], news)
+
+    adjusted_home_rating = game["home_rating"] + home_news_impact
+    adjusted_away_rating = game["away_rating"] + away_news_impact
+    rating_gap = adjusted_home_rating - adjusted_away_rating
+
     projected_margin = round(rating_gap * 0.45 + 2.2, 1)
     home_probability = max(0.12, min(0.88, 0.5 + projected_margin / 22))
     winner = game["home_team"] if projected_margin >= 0 else game["away_team"]
     win_probability = home_probability if projected_margin >= 0 else 1 - home_probability
+
     market_spread = game["market_spread"]
     model_edge = projected_margin + market_spread
     spread_pick = (
@@ -49,16 +57,27 @@ def predict(game: dict) -> Prediction:
         if model_edge >= 0
         else f'{game["away_team"]} {-market_spread:+g}'
     )
+
     projected_total = round(game["pace_total"] + abs(rating_gap) * 0.08, 1)
     total_pick = "OVER" if projected_total > game["market_total"] else "UNDER"
     confidence = round(min(94, 62 + abs(projected_margin) * 2.1))
-    survivor_score = round(min(98, win_probability * 100 - max(0, game["home_rating"] - 88) * 0.15))
+    survivor_score = round(min(98, win_probability * 100 - max(0, adjusted_home_rating - 88) * 0.15))
 
     reasons = [
         f"Model projects {winner} by {abs(projected_margin):.1f} points.",
         f"Estimated win probability is {win_probability:.0%}.",
         f"Model total is {projected_total:.1f} versus market {game['market_total']:.1f}.",
     ]
+
+    material_news = [item for item in news if item.impact != 0]
+    if material_news:
+        headline = material_news[0]
+        direction = "helps" if (
+            headline.impact > 0 and headline.matched_team == winner
+        ) or (
+            headline.impact < 0 and headline.matched_team != winner
+        ) else "adds risk to"
+        reasons.insert(0, f"Yahoo update {direction} the pick: {headline.title}")
 
     return Prediction(
         game_id=game["game_id"],
@@ -75,7 +94,8 @@ def predict(game: dict) -> Prediction:
         spread_pick=spread_pick,
         total_pick=total_pick,
         reasons=reasons,
-        news=news_for_teams(game["away_team"], game["home_team"]),
+        news=news,
+        news_impact=home_news_impact - away_news_impact,
     )
 
 

@@ -1,13 +1,11 @@
 import Link from "next/link";
 import { SavePickButton } from "../../../components/SavePickButton";
-
-const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8300";
+import { getGame } from "../../../lib/api";
 
 export default async function GamePage({ params }: { params: Promise<{ gameId: string }> }) {
   const { gameId } = await params;
-  const response = await fetch(`${API_URL}/api/games/${gameId}`, { cache: "no-store" });
-  if (!response.ok) return <main><p>Game not found.</p></main>;
-  const game = await response.json();
+  const game = await getGame(gameId);
+  if (!game) return <main><p>Game not found.</p></main>;
 
   return (
     <main>
@@ -36,7 +34,14 @@ export default async function GamePage({ params }: { params: Promise<{ gameId: s
 
         <h2>Yahoo Sports News</h2>
         {game.news.length ? (
-          <ul className="news-list">{game.news.slice(0, 4).map((item: any) => <li key={item.link}><a href={item.link} target="_blank" rel="noreferrer">{item.title}</a></li>)}</ul>
+          <ul className="news-list detailed-news">{game.news.slice(0, 5).map((item: any) => (
+            <li key={item.link}>
+              <a href={item.link} target="_blank" rel="noreferrer">{item.title}</a>
+              <span className={item.impact < 0 ? "impact-negative" : item.impact > 0 ? "impact-positive" : "subtle"}>
+                {item.category.replace("_", " ")}{item.impact ? ` · impact ${item.impact > 0 ? "+" : ""}${item.impact}` : ""}
+              </span>
+            </li>
+          ))}</ul>
         ) : <p className="subtle">No matching Yahoo NFL headlines right now.</p>}
       </article>
     </main>

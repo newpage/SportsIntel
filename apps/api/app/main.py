@@ -2,8 +2,9 @@ from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.engine import all_predictions
+from app.news import fetch_yahoo_nfl_news
 
-app = FastAPI(title="SportsIntel API", version="0.1.0")
+app = FastAPI(title="SportsIntel API", version="0.2.0")
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["http://localhost:3300"],
@@ -24,12 +25,14 @@ def home():
     survivor = max(predictions, key=lambda item: item.survivor_score)
     spread = max(predictions, key=lambda item: abs(item.projected_margin + item.market_spread))
     total = max(predictions, key=lambda item: abs(item.projected_total - item.market_total))
+    impactful_news = [item for item in fetch_yahoo_nfl_news() if item.impact != 0][:4]
     return {
         "week": 1,
         "best_survivor": survivor,
         "best_spread": spread,
         "best_total": total,
         "games": predictions,
+        "latest_news": impactful_news,
     }
 
 
