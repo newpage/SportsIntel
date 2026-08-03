@@ -57,6 +57,31 @@ export default async function MlbPage() {
         </article>
       )}
 
+
+      {data.daily_card?.length > 0 && (
+        <section className="games">
+          <div className="section-heading">
+            <div>
+              <div className="eyebrow">Fast decisions</div>
+              <h2>Today&apos;s Daily Card</h2>
+            </div>
+            <span className="subtle">Top five moneyline recommendations.</span>
+          </div>
+
+          <div className="game-list">
+            {data.daily_card.map((game: any, index: number) => (
+              <Link className="card game" key={game.game_id} href={`/mlb/${game.game_id}`}>
+                <span>
+                  <strong>{index + 1}. {game.stars} {game.moneyline_pick}</strong>
+                  <span className="subtle"> · {game.recommendation}</span>
+                </span>
+                <span className="game-call">{game.confidence}% →</span>
+              </Link>
+            ))}
+          </div>
+        </section>
+      )}
+
       <section className="games">
         <div className="section-heading">
           <div>

@@ -144,12 +144,23 @@ def mlb_home() -> dict:
             pick_of_day and game["game_id"] == pick_of_day["game_id"]
         )
 
+    daily_card = sorted(
+        games,
+        key=lambda game: (
+            game["rating"],
+            game["confidence"],
+            int(bool(game["away_pitcher"])) + int(bool(game["home_pitcher"])),
+        ),
+        reverse=True,
+    )[:5]
+
     result = {
         "sport": "MLB",
         "date": date.today().isoformat(),
         "games": games,
         "best_pick": pick_of_day,
         "pick_of_day": pick_of_day,
+        "daily_card": daily_card,
         "latest_news": _news(),
     }
     _CACHE = (now + CACHE_SECONDS, result)
