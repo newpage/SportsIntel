@@ -75,19 +75,51 @@ def _game_contains_team(yahoo_game: dict, mlb_team_name: str) -> bool:
 def _clean_person_name(value: str | None) -> str | None:
     if not value:
         return None
+
     value = " ".join(value.split()).strip(" :-")
+    normalized = value.lower()
+
     if not value or value.upper() in {"TBD", "N/A", "NA"}:
         return None
-    if len(value) > 80 or not re.search(r"[A-Za-z]", value):
+    if len(value) > 80:
         return None
+    if normalized.startswith(("mlb.g.", "mlb.p.", "http://", "https://")):
+        return None
+    if normalized in {
+        "gamestarting_pitchers",
+        "starting_pitchers",
+        "away_pitcher",
+        "home_pitcher",
+    }:
+        return None
+    if "_" in value:
+        return None
+    if re.fullmatch(r"[a-z]+\.[a-z]+\.\d+", normalized):
+        return None
+
+    words = re.findall(r"[A-Za-zÀ-ÖØ-öø-ÿ'’-]+", value)
+    if len(words) < 2:
+        return None
+    if any(word.lower() in {"pitcher", "starting", "game", "home", "away"} for word in words):
+        return None
+
     return value
 
 
 def _name_from_mapping(value: Any) -> str | None:
+    if isinstance(value, str):
+        return _clean_person_name(value)
     if not isinstance(value, dict):
-        return _clean_person_name(value) if isinstance(value, str) else None
+        return None
 
-    for key in ("full_name", "display_name", "player_name", "name", "short_name"):
+    # Yahoo uses several explicit name fields across scoreboard payload versions.
+    for key in (
+        "full_name",
+        "display_name",
+        "player_name",
+        "short_name",
+        "first_last",
+    ):
         candidate = value.get(key)
         if isinstance(candidate, str):
             cleaned = _clean_person_name(candidate)
@@ -97,18 +129,22 @@ def _name_from_mapping(value: Any) -> str | None:
     first = value.get("first_name") or value.get("first")
     last = value.get("last_name") or value.get("last")
     if isinstance(first, str) and isinstance(last, str):
-        return _clean_person_name(f"{first} {last}")
+        cleaned = _clean_person_name(f"{first} {last}")
+        if cleaned:
+            return cleaned
 
-    for key in ("player", "athlete", "person"):
+    # Only inspect known player containers. Do not recursively inspect arbitrary
+    # metadata because Yahoo game IDs and schema labels can resemble names.
+    for key in ("player", "athlete", "person", "player_data", "player_info"):
         candidate = _name_from_mapping(value.get(key))
         if candidate:
             return candidate
 
-    for key, nested in value.items():
-        if "name" in str(key).lower():
-            candidate = _name_from_mapping(nested)
-            if candidate:
-                return candidate
+    # Some Yahoo entries use a generic "name" field. Accept it only after the
+    # strict human-name validation above.
+    candidate = value.get("name")
+    if isinstance(candidate, str):
+        return _clean_person_name(candidate)
 
     return None
 
