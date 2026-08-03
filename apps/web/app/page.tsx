@@ -35,7 +35,7 @@ export default async function HomePage() {
           <div className="logo">SportsIntel</div>
           <div className="subtle">NFL Week {data.week}</div>
         </div>
-        <nav className="top-nav"><Link href="/my-picks">My Picks</Link></nav>
+        <nav className="top-nav"><Link href="/">NFL</Link><Link href="/mlb">MLB</Link><Link href="/my-picks">My Picks</Link></nav>
       </header>
 
       <section className="home-intro">

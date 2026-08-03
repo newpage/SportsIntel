@@ -3,6 +3,7 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from app.engine import all_predictions
 from app.news import fetch_yahoo_nfl_news
+from app.mlb import mlb_home
 
 app = FastAPI(title="SportsIntel API", version="0.2.0")
 app.add_middleware(
@@ -34,6 +35,11 @@ def home():
         "games": predictions,
         "latest_news": impactful_news,
     }
+
+
+@app.get("/api/mlb")
+def mlb():
+    return mlb_home()
 
 
 @app.get("/api/games/{game_id}")

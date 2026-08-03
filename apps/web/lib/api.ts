@@ -11,3 +11,9 @@ export async function getGame(gameId: string) {
   if (!response.ok) throw new Error("Unable to load game data");
   return response.json();
 }
+
+export async function getMlb() {
+  const response = await fetch(`${API_URL}/api/mlb`, { cache: "no-store" });
+  if (!response.ok) throw new Error("Unable to load MLB data");
+  return response.json();
+}
