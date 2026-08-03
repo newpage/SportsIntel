@@ -38,6 +38,11 @@ export default async function MlbGamePage({ params }: { params: Promise<{ gameId
         </section>
 
         <section className="mlb-detail-grid">
+          <div className="market-card momentum-card">
+            <span>{game.away_team} recent form</span>
+            <strong>{game.away_momentum.record}</strong>
+            <small>Last {game.away_momentum.games} completed games · {game.away_momentum.label}</small>
+          </div>
           <div className="market-card">
             <span>Away team</span>
             <strong>{game.away_team}</strong>
@@ -53,6 +58,11 @@ export default async function MlbGamePage({ params }: { params: Promise<{ gameId
             <span>Home team</span>
             <strong>{game.home_team}</strong>
             <small>{game.home_record}</small>
+          </div>
+          <div className="market-card momentum-card">
+            <span>{game.home_team} recent form</span>
+            <strong>{game.home_momentum.record}</strong>
+            <small>Last {game.home_momentum.games} completed games · {game.home_momentum.label}</small>
           </div>
         </section>
 

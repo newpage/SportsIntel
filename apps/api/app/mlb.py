@@ -59,6 +59,78 @@ def _pitcher_status(away_pitcher: str | None, home_pitcher: str | None) -> dict:
     }
 
 
+
+def _recent_form() -> dict[int, dict]:
+    end_date = date.today() - timedelta(days=1)
+    start_date = end_date - timedelta(days=20)
+
+    response = httpx.get(
+        SCHEDULE_URL,
+        params={
+            "sportId": 1,
+            "startDate": start_date.isoformat(),
+            "endDate": end_date.isoformat(),
+        },
+        timeout=15,
+    )
+    response.raise_for_status()
+
+    results: dict[int, list[bool]] = {}
+    for day in response.json().get("dates", []):
+        for game in day.get("games", []):
+            if game.get("status", {}).get("abstractGameState") != "Final":
+                continue
+
+            away = game.get("teams", {}).get("away", {})
+            home = game.get("teams", {}).get("home", {})
+            away_score = away.get("score")
+            home_score = home.get("score")
+            away_id = away.get("team", {}).get("id")
+            home_id = home.get("team", {}).get("id")
+
+            if None in (away_score, home_score, away_id, home_id):
+                continue
+
+            away_won = away_score > home_score
+            results.setdefault(away_id, []).append(away_won)
+            results.setdefault(home_id, []).append(not away_won)
+
+    momentum: dict[int, dict] = {}
+    for team_id, outcomes in results.items():
+        recent = outcomes[-10:]
+        wins = sum(recent)
+        losses = len(recent) - wins
+        win_pct = wins / len(recent) if recent else 0.5
+        momentum[team_id] = {
+            "wins": wins,
+            "losses": losses,
+            "games": len(recent),
+            "record": f"{wins}-{losses}" if recent else "Unavailable",
+            "win_pct": round(win_pct, 3),
+            "label": (
+                "Hot"
+                if len(recent) >= 5 and win_pct >= 0.7
+                else "Cold"
+                if len(recent) >= 5 and win_pct <= 0.3
+                else "Steady"
+            ),
+        }
+    return momentum
+
+
+def _team_momentum(momentum: dict[int, dict], team_id: int) -> dict:
+    return momentum.get(
+        team_id,
+        {
+            "wins": 0,
+            "losses": 0,
+            "games": 0,
+            "record": "Unavailable",
+            "win_pct": 0.5,
+            "label": "Unknown",
+        },
+    )
+
 def _record(record: dict) -> str:
     wins = record.get("wins")
     losses = record.get("losses")
@@ -72,12 +144,23 @@ def _confidence_details(
     gap: float,
     away_pitcher: str | None,
     home_pitcher: str | None,
+    away_momentum: dict,
+    home_momentum: dict,
 ) -> dict:
     record_impact = 5 if gap >= 0.15 else 4 if gap >= 0.08 else 3 if gap >= 0.04 else 2
     pitcher_status = _pitcher_status(away_pitcher, home_pitcher)
     pitchers_confirmed = pitcher_status["code"] == "confirmed"
     pitcher_impact = 4 if pitchers_confirmed else 3 if pitcher_status["code"] == "partial" else 2
     home_pick = winner == home_name
+    momentum_gap = abs(home_momentum["win_pct"] - away_momentum["win_pct"])
+    momentum_impact = 4 if momentum_gap >= 0.4 else 3 if momentum_gap >= 0.2 else 2
+    momentum_leader = (
+        home_name
+        if home_momentum["win_pct"] > away_momentum["win_pct"]
+        else away_name
+        if away_momentum["win_pct"] > home_momentum["win_pct"]
+        else None
+    )
 
     factors = [
         {
@@ -87,6 +170,20 @@ def _confidence_details(
                 f"{winner} has the stronger season record."
                 if gap >= 0.04
                 else f"{home_name} and {away_name} have relatively similar season records."
+            ),
+        },
+        {
+            "title": "Recent Team Momentum",
+            "impact": momentum_impact,
+            "summary": (
+                f"{momentum_leader} has the stronger recent form: "
+                f"{away_name} {away_momentum['record']} vs "
+                f"{home_name} {home_momentum['record']} over each team's latest games."
+                if momentum_leader
+                else (
+                    f"Recent form is even: {away_name} {away_momentum['record']} vs "
+                    f"{home_name} {home_momentum['record']}."
+                )
             ),
         },
         {
@@ -129,18 +226,25 @@ def _confidence_details(
     }
 
 
-def _predict(game: dict) -> dict:
+def _predict(game: dict, momentum: dict[int, dict] | None = None) -> dict:
     away = game["teams"]["away"]
     home = game["teams"]["home"]
     away_name = away["team"]["name"]
     home_name = home["team"]["name"]
+    away_team_id = away["team"]["id"]
+    home_team_id = home["team"]["id"]
     away_pct = _pct(away.get("leagueRecord", {}))
     home_pct = _pct(home.get("leagueRecord", {}))
 
-    adjusted_home = home_pct + 0.015
+    momentum = momentum or {}
+    away_momentum = _team_momentum(momentum, away_team_id)
+    home_momentum = _team_momentum(momentum, home_team_id)
+    momentum_adjustment = (home_momentum["win_pct"] - away_momentum["win_pct"]) * 0.025
+
+    adjusted_home = home_pct + 0.015 + momentum_adjustment
     winner = home_name if adjusted_home >= away_pct else away_name
     gap = abs(adjusted_home - away_pct)
-    confidence = round(min(84, 58 + gap * 95))
+    confidence = round(min(88, max(55, 58 + gap * 95 + abs(momentum_adjustment) * 100)))
     probability = min(0.72, 0.52 + gap * 1.45)
 
     away_score = away.get("score")
@@ -161,6 +265,8 @@ def _predict(game: dict) -> dict:
         gap=gap,
         away_pitcher=away_pitcher,
         home_pitcher=home_pitcher,
+        away_momentum=away_momentum,
+        home_momentum=home_momentum,
     )
 
     return {
@@ -179,6 +285,15 @@ def _predict(game: dict) -> dict:
         "win_probability": round(probability, 3),
         "away_record": _record(away.get("leagueRecord", {})),
         "home_record": _record(home.get("leagueRecord", {})),
+        "away_momentum": away_momentum,
+        "home_momentum": home_momentum,
+        "momentum_advantage": (
+            home_name
+            if home_momentum["win_pct"] > away_momentum["win_pct"]
+            else away_name
+            if away_momentum["win_pct"] > home_momentum["win_pct"]
+            else None
+        ),
         "away_pitcher": away_pitcher,
         "home_pitcher": home_pitcher,
         "pitcher_status": pitcher_status,
@@ -189,6 +304,10 @@ def _predict(game: dict) -> dict:
         "reasons": [
             f"{winner} has the stronger season record after a small home-field adjustment.",
             f"Current team-record gap is {gap:.3f}.",
+            (
+                f"Recent form: {away_name} {away_momentum['record']} "
+                f"vs {home_name} {home_momentum['record']}."
+            ),
             (
                 f"Probable pitchers: {away_pitcher or 'Not yet announced'} vs "
                 f"{home_pitcher or 'Not yet announced'}. "
@@ -277,8 +396,9 @@ def mlb_home() -> dict:
     response.raise_for_status()
     payload = response.json()
 
+    momentum = _recent_form()
     games = [
-        _predict(game)
+        _predict(game, momentum)
         for day in payload.get("dates", [])
         for game in day.get("games", [])
     ]

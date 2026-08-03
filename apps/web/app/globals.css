@@ -331,3 +331,7 @@ button:focus-visible,a:focus-visible { outline:none; box-shadow:var(--focus-ring
   }
 }
 
+/* MLB team momentum */
+.momentum-card strong { font-size:26px; }
+.momentum-card small { line-height:1.45; }
+
