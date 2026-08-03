@@ -47,8 +47,14 @@ export function ConfidenceDetails({
       if (event.key === "Escape") setOpen(false);
     }
 
+    const previousOverflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
     document.addEventListener("keydown", closeOnEscape);
-    return () => document.removeEventListener("keydown", closeOnEscape);
+
+    return () => {
+      document.body.style.overflow = previousOverflow;
+      document.removeEventListener("keydown", closeOnEscape);
+    };
   }, [open]);
 
   return (
@@ -69,13 +75,18 @@ export function ConfidenceDetails({
       </button>
 
       {open && (
-        <div className="confidence-modal-backdrop" role="presentation" onMouseDown={() => setOpen(false)}>
+        <div
+          className="confidence-modal-backdrop"
+          role="presentation"
+          onClick={(event) => {
+            if (event.target === event.currentTarget) setOpen(false);
+          }}
+        >
           <section
             className="confidence-modal"
             role="dialog"
             aria-modal="true"
             aria-labelledby={titleId}
-            onMouseDown={(event) => event.stopPropagation()}
           >
             <button
               className="confidence-modal-close"
