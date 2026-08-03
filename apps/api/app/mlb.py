@@ -36,6 +36,27 @@ def _pitcher(game: dict, side: str) -> str | None:
     return probable.get("fullName") if probable else None
 
 
+def _pitcher_status(away_pitcher: str | None, home_pitcher: str | None) -> dict:
+    confirmed_count = int(bool(away_pitcher)) + int(bool(home_pitcher))
+    if confirmed_count == 2:
+        return {
+            "code": "confirmed",
+            "label": "Confirmed",
+            "message": "Both probable starting pitchers have been announced.",
+        }
+    if confirmed_count == 1:
+        return {
+            "code": "partial",
+            "label": "Partially Confirmed",
+            "message": "One probable starter has been announced; the other is still pending.",
+        }
+    return {
+        "code": "pending",
+        "label": "Not Yet Announced",
+        "message": "Neither team has officially announced a probable starter yet.",
+    }
+
+
 def _record(record: dict) -> str:
     wins = record.get("wins")
     losses = record.get("losses")
@@ -51,8 +72,9 @@ def _confidence_details(
     home_pitcher: str | None,
 ) -> dict:
     record_impact = 5 if gap >= 0.15 else 4 if gap >= 0.08 else 3 if gap >= 0.04 else 2
-    pitchers_confirmed = bool(away_pitcher and home_pitcher)
-    pitcher_impact = 4 if pitchers_confirmed else 2
+    pitcher_status = _pitcher_status(away_pitcher, home_pitcher)
+    pitchers_confirmed = pitcher_status["code"] == "confirmed"
+    pitcher_impact = 4 if pitchers_confirmed else 3 if pitcher_status["code"] == "partial" else 2
     home_pick = winner == home_name
 
     factors = [
@@ -71,7 +93,7 @@ def _confidence_details(
             "summary": (
                 f"Both probable starters are confirmed: {away_pitcher} vs {home_pitcher}."
                 if pitchers_confirmed
-                else "At least one probable starting pitcher has not yet been announced."
+                else pitcher_status["message"]
             ),
         },
         {
@@ -128,6 +150,7 @@ def _predict(game: dict) -> dict:
 
     away_pitcher = _pitcher(game, "away")
     home_pitcher = _pitcher(game, "home")
+    pitcher_status = _pitcher_status(away_pitcher, home_pitcher)
     rec = recommendation(confidence)
     confidence_details = _confidence_details(
         winner=winner,
@@ -156,6 +179,7 @@ def _predict(game: dict) -> dict:
         "home_record": _record(home.get("leagueRecord", {})),
         "away_pitcher": away_pitcher,
         "home_pitcher": home_pitcher,
+        "pitcher_status": pitcher_status,
         "confidence": confidence,
         "moneyline_pick": winner,
         "run_line_pick": f"{winner} -1.5",
@@ -164,8 +188,9 @@ def _predict(game: dict) -> dict:
             f"{winner} has the stronger season record after a small home-field adjustment.",
             f"Current team-record gap is {gap:.3f}.",
             (
-                f"Probable pitchers: {_pitcher(game, 'away') or 'TBD'} vs "
-                f"{_pitcher(game, 'home') or 'TBD'}."
+                f"Probable pitchers: {away_pitcher or 'Not yet announced'} vs "
+                f"{home_pitcher or 'Not yet announced'}. "
+                f"{pitcher_status['message']}"
             ),
         ],
     }

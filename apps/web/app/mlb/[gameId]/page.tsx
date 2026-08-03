@@ -37,9 +37,10 @@ export default async function MlbGamePage({ params }: { params: Promise<{ gameId
             <small>{game.away_record}</small>
           </div>
           <div className="market-card">
-            <span>Probable pitchers</span>
-            <strong>{game.away_pitcher || "TBD"}</strong>
-            <small>vs {game.home_pitcher || "TBD"}</small>
+            <span>Probable pitchers · {game.pitcher_status.label}</span>
+            <strong>{game.away_pitcher || "Not yet announced"}</strong>
+            <small>vs {game.home_pitcher || "Not yet announced"}</small>
+            <small>{game.pitcher_status.message}</small>
           </div>
           <div className="market-card">
             <span>Home team</span>
