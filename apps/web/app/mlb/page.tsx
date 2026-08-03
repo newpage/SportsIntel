@@ -82,6 +82,21 @@ export default async function MlbPage() {
         </section>
       )}
 
+      {data.stay_away && (
+        <Link className="card breaking-impact" href={`/mlb/${data.stay_away.game_id}`}>
+          <div>
+            <div className="kicker">⚠ Stay Away</div>
+            <div className="breaking-headline">
+              {data.stay_away.away_team} at {data.stay_away.home_team}
+            </div>
+            <p className="subtle">{data.stay_away.stay_away_reason}</p>
+          </div>
+          <span className="impact-badge negative">
+            {data.stay_away.confidence}% confidence
+          </span>
+        </Link>
+      )}
+
       <section className="games">
         <div className="section-heading">
           <div>

@@ -154,6 +154,23 @@ def mlb_home() -> dict:
         reverse=True,
     )[:5]
 
+    stay_away = min(
+        games,
+        key=lambda game: (
+            game["rating"],
+            game["confidence"],
+            int(bool(game["away_pitcher"])) + int(bool(game["home_pitcher"])),
+        ),
+    ) if games else None
+
+    if stay_away:
+        missing_pitchers = not stay_away["away_pitcher"] or not stay_away["home_pitcher"]
+        stay_away["stay_away_reason"] = (
+            "At least one starting pitcher is not yet confirmed."
+            if missing_pitchers
+            else "This is the lowest-confidence matchup on today's board."
+        )
+
     result = {
         "sport": "MLB",
         "date": date.today().isoformat(),
@@ -161,6 +178,7 @@ def mlb_home() -> dict:
         "best_pick": pick_of_day,
         "pick_of_day": pick_of_day,
         "daily_card": daily_card,
+        "stay_away": stay_away,
         "latest_news": _news(),
     }
     _CACHE = (now + CACHE_SECONDS, result)
