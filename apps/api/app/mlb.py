@@ -1,4 +1,4 @@
-from datetime import date
+from datetime import date, timedelta
 import os
 import time
 
@@ -128,3 +128,36 @@ def mlb_home() -> dict:
 
 def mlb_game(game_id: str) -> dict | None:
     return next((game for game in mlb_home()["games"] if game["game_id"] == game_id), None)
+
+
+def mlb_results(days: int = 7) -> dict:
+    safe_days = max(1, min(days, 30))
+    end_date = date.today()
+    start_date = end_date - timedelta(days=safe_days - 1)
+
+    response = httpx.get(
+        SCHEDULE_URL,
+        params={
+            "sportId": 1,
+            "startDate": start_date.isoformat(),
+            "endDate": end_date.isoformat(),
+        },
+        timeout=15,
+    )
+    response.raise_for_status()
+    payload = response.json()
+
+    games = [
+        _predict(game)
+        for day in payload.get("dates", [])
+        for game in day.get("games", [])
+    ]
+    games.sort(key=lambda game: game["start_time"], reverse=True)
+
+    return {
+        "sport": "MLB",
+        "start_date": start_date.isoformat(),
+        "end_date": end_date.isoformat(),
+        "days": safe_days,
+        "games": games,
+    }

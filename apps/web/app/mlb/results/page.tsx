@@ -1,16 +1,16 @@
 import Link from "next/link";
-import { getMlb } from "../../../lib/api";
+import { getMlbResults } from "../../../lib/api";
 import { MlbResultsClient } from "../../../components/MlbResultsClient";
 
 export default async function MlbResultsPage() {
-  const data = await getMlb();
+  const data = await getMlbResults(7);
 
   return (
     <main>
       <header>
         <div>
           <div className="logo">SportsIntel</div>
-          <div className="subtle">MLB prediction results</div>
+          <div className="subtle">MLB results · last 7 days</div>
         </div>
         <nav className="top-nav">
           <Link href="/">NFL</Link>
@@ -25,7 +25,7 @@ export default async function MlbResultsPage() {
           <h1>How did the saved picks perform?</h1>
         </div>
         <div className="subtle home-intro-note">
-          Only predictions saved in this browser before final scores are evaluated.
+          Saved browser predictions are compared with final scores from the last seven days.
         </div>
       </section>
 
