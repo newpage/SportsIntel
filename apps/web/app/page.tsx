@@ -5,66 +5,107 @@ function ConfidenceBar({ value }: { value: number }) {
   return <div className="confidence-track"><span style={{ width: `${value}%` }} /></div>;
 }
 
-function PickCard({ title, pick, confidence, why, href }: any) {
+function SecondaryPick({ title, pick, confidence, why, href }: any) {
   return (
-    <article className="card recommendation-card">
-      <div className="kicker">{title}</div>
-      <div className="pick">{pick}</div>
-      <div className="confidence-row">
+    <Link className="card compact-pick" href={href}>
+      <div>
+        <div className="kicker">{title}</div>
+        <div className="compact-pick-name">{pick}</div>
+        <div className="compact-reason">{why}</div>
+      </div>
+      <div className="compact-score">
         <strong>{confidence}%</strong>
         <span>confidence</span>
       </div>
-      <ConfidenceBar value={confidence} />
-      <div className="reason">{why}</div>
-      <Link className="primary-link" href={href}>Why this pick →</Link>
-    </article>
+    </Link>
   );
 }
 
 export default async function HomePage() {
   const data = await getHome();
+  const topNews = data.latest_news?.[0];
+  const totalReason =
+    data.best_total.reasons.find((reason: string) => reason.startsWith("Model total")) ??
+    data.best_total.reasons[0];
+
   return (
     <main>
       <header>
-        <div><div className="logo">SportsIntel</div><div className="subtle">NFL Week {data.week}</div></div>
+        <div>
+          <div className="logo">SportsIntel</div>
+          <div className="subtle">NFL Week {data.week}</div>
+        </div>
         <nav className="top-nav"><Link href="/my-picks">My Picks</Link></nav>
       </header>
 
-      <section className="hero-copy">
-        <h1>Make your NFL decisions in under a minute.</h1>
-        <p className="subtle">One clear pick, one confidence score, and the reasons that matter.</p>
+      <section className="home-intro">
+        <div>
+          <div className="eyebrow">Your 60-second NFL brief</div>
+          <h1>One clear decision. The reasons that matter.</h1>
+        </div>
+        <div className="subtle home-intro-note">Yahoo Sports is the only news source used in this version.</div>
       </section>
 
-      <section className="grid">
-        <PickCard title="Best Survivor" pick={data.best_survivor.winner} confidence={data.best_survivor.confidence} why={data.best_survivor.reasons[0]} href={`/games/${data.best_survivor.game_id}`} />
-        <PickCard title="Best Spread" pick={data.best_spread.spread_pick} confidence={data.best_spread.confidence} why={data.best_spread.reasons[0]} href={`/games/${data.best_spread.game_id}`} />
-        <PickCard title="Best Total" pick={`${data.best_total.total_pick} ${data.best_total.market_total}`} confidence={data.best_total.confidence} why={data.best_total.reasons.find((reason: string) => reason.startsWith("Model total")) ?? data.best_total.reasons[0]} href={`/games/${data.best_total.game_id}`} />
+      <section className="card hero-pick">
+        <div className="hero-pick-copy">
+          <div className="kicker">Best Survivor Pick</div>
+          <div className="hero-pick-name">{data.best_survivor.winner}</div>
+          <div className="hero-pick-reason">{data.best_survivor.reasons[0]}</div>
+          <Link className="primary-button-link" href={`/games/${data.best_survivor.game_id}`}>
+            See why this is the pick →
+          </Link>
+        </div>
+        <div className="hero-confidence">
+          <strong>{data.best_survivor.confidence}%</strong>
+          <span>confidence</span>
+          <ConfidenceBar value={data.best_survivor.confidence} />
+        </div>
       </section>
 
-      {data.latest_news?.length > 0 && (
-        <section className="news-impact card">
-          <div className="section-heading"><h2>Latest Yahoo Impact</h2><span className="subtle">Only headlines that may affect a pick.</span></div>
-          <ul className="news-list">
-            {data.latest_news.map((item: any) => (
-              <li key={item.link}>
-                <a href={item.link} target="_blank" rel="noreferrer">{item.title}</a>
-                <span className={item.impact < 0 ? "impact-negative" : "impact-positive"}>
-                  {item.impact < 0 ? "Negative" : "Positive"} impact
-                </span>
-              </li>
-            ))}
-          </ul>
+      <section className="secondary-picks">
+        <SecondaryPick
+          title="Best Spread"
+          pick={data.best_spread.spread_pick}
+          confidence={data.best_spread.confidence}
+          why={data.best_spread.reasons[0]}
+          href={`/games/${data.best_spread.game_id}`}
+        />
+        <SecondaryPick
+          title="Best Total"
+          pick={`${data.best_total.total_pick} ${data.best_total.market_total}`}
+          confidence={data.best_total.confidence}
+          why={totalReason}
+          href={`/games/${data.best_total.game_id}`}
+        />
+      </section>
+
+      {topNews && (
+        <section className="card breaking-impact">
+          <div>
+            <div className="kicker">Biggest Yahoo News Impact</div>
+            <a href={topNews.link} target="_blank" rel="noreferrer" className="breaking-headline">
+              {topNews.title}
+            </a>
+          </div>
+          <span className={topNews.impact < 0 ? "impact-badge negative" : "impact-badge positive"}>
+            {topNews.impact < 0 ? "Negative" : "Positive"} impact
+          </span>
         </section>
       )}
 
       <section className="games">
-        <div className="section-heading"><h2>Today's Games</h2><span className="subtle">Tap any matchup for the full decision.</span></div>
-        {data.games.map((game: any) => (
-          <Link className="card game" key={game.game_id} href={`/games/${game.game_id}`}>
-            <span><strong>{game.away_team}</strong> at <strong>{game.home_team}</strong></span>
-            <span>{game.winner} · {game.confidence}% →</span>
-          </Link>
-        ))}
+        <div className="section-heading">
+          <div><div className="eyebrow">Quick scan</div><h2>Today&apos;s Games</h2></div>
+          <span className="subtle">Tap for the full prediction.</span>
+        </div>
+        <div className="game-list">
+          {data.games.map((game: any) => (
+            <Link className="card game" key={game.game_id} href={`/games/${game.game_id}`}>
+              <span><strong>{game.away_team}</strong> at <strong>{game.home_team}</strong></span>
+              <span className="game-call">{game.winner} · {game.confidence}% →</span>
+            </Link>
+          ))}
+        </div>
       </section>
     </main>
   );
