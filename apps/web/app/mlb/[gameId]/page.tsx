@@ -2,6 +2,15 @@ import Link from "next/link";
 import { getMlbGame, getMlb } from "../../../lib/api";
 import { ConfidenceDetails } from "../../../components/ConfidenceDetails";
 
+function PitcherStat({ label, value }: { label: string; value?: string | null }) {
+  return (
+    <div className="pitcher-stat">
+      <span>{label}</span>
+      <strong>{value || "—"}</strong>
+    </div>
+  );
+}
+
 export default async function MlbGamePage({ params }: { params: Promise<{ gameId: string }> }) {
   const { gameId } = await params;
   const [game, home] = await Promise.all([getMlbGame(gameId), getMlb()]);
@@ -76,6 +85,36 @@ export default async function MlbGamePage({ params }: { params: Promise<{ gameId
             <small>Last {game.home_momentum.games} completed games · {game.home_momentum.label}</small>
           </div>
         </section>
+
+        {(game.away_pitcher || game.home_pitcher) && (
+          <section className="why-section">
+            <div className="eyebrow">Yahoo Sports pitcher data</div>
+            <h2>Starting Pitcher Comparison</h2>
+            <div className="market-grid">
+              <div className="market-card">
+                <span>{game.away_team}</span>
+                <strong>{game.away_pitcher || "Not yet announced"}</strong>
+                <div className="pitcher-stat-grid">
+                  <PitcherStat label="Record" value={game.away_pitcher_stats?.record} />
+                  <PitcherStat label="ERA" value={game.away_pitcher_stats?.era} />
+                  <PitcherStat label="WHIP" value={game.away_pitcher_stats?.whip} />
+                  <PitcherStat label="Throws" value={game.away_pitcher_stats?.throws} />
+                </div>
+              </div>
+              <div className="market-card">
+                <span>{game.home_team}</span>
+                <strong>{game.home_pitcher || "Not yet announced"}</strong>
+                <div className="pitcher-stat-grid">
+                  <PitcherStat label="Record" value={game.home_pitcher_stats?.record} />
+                  <PitcherStat label="ERA" value={game.home_pitcher_stats?.era} />
+                  <PitcherStat label="WHIP" value={game.home_pitcher_stats?.whip} />
+                  <PitcherStat label="Throws" value={game.home_pitcher_stats?.throws} />
+                </div>
+              </div>
+            </div>
+            <p className="subtle">Displayed for comparison only; pitcher statistics do not change confidence yet.</p>
+          </section>
+        )}
 
         <section className="why-section">
           <div className="eyebrow">Simple model</div>

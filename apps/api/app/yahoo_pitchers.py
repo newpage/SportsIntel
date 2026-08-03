@@ -87,14 +87,7 @@ def _name_from_mapping(value: Any) -> str | None:
     if not isinstance(value, dict):
         return _clean_person_name(value) if isinstance(value, str) else None
 
-    preferred_keys = (
-        "full_name",
-        "display_name",
-        "player_name",
-        "name",
-        "short_name",
-    )
-    for key in preferred_keys:
+    for key in ("full_name", "display_name", "player_name", "name", "short_name"):
         candidate = value.get(key)
         if isinstance(candidate, str):
             cleaned = _clean_person_name(candidate)
@@ -107,8 +100,7 @@ def _name_from_mapping(value: Any) -> str | None:
         return _clean_person_name(f"{first} {last}")
 
     for key in ("player", "athlete", "person"):
-        nested = value.get(key)
-        candidate = _name_from_mapping(nested)
+        candidate = _name_from_mapping(value.get(key))
         if candidate:
             return candidate
 
@@ -121,28 +113,59 @@ def _name_from_mapping(value: Any) -> str | None:
     return None
 
 
-def _extract_ordered_pitchers(yahoo_game: dict) -> tuple[str | None, str | None]:
+def _stats_from_mapping(value: Any) -> dict[str, str]:
+    if not isinstance(value, dict):
+        return {}
+
+    stats: dict[str, str] = {}
+    raw_stats = value.get("stats")
+    if isinstance(raw_stats, list):
+        for stat in raw_stats:
+            if not isinstance(stat, dict):
+                continue
+            key = str(stat.get("abbr") or stat.get("name") or "").strip().upper()
+            stat_value = stat.get("value")
+            if key and stat_value not in (None, ""):
+                stats[key] = str(stat_value)
+
+    for key in ("era", "whip", "wins", "losses", "record", "handedness", "throws"):
+        raw = value.get(key)
+        if raw not in (None, ""):
+            stats[key.upper()] = str(raw)
+
+    return stats
+
+
+def _pitcher_details(value: Any) -> dict:
+    if not isinstance(value, dict):
+        return {"name": _name_from_mapping(value), "stats": {}}
+
+    return {
+        "name": _name_from_mapping(value),
+        "player_id": value.get("player_id") or value.get("id"),
+        "stats": _stats_from_mapping(value),
+    }
+
+
+def _extract_ordered_pitchers(yahoo_game: dict) -> tuple[dict, dict]:
     raw = yahoo_game.get("starting_pitchers")
     if not isinstance(raw, list):
-        return None, None
+        return {}, {}
 
-    names = [_name_from_mapping(item) for item in raw]
-    names = [name for name in names if name]
-    if len(names) >= 2:
-        return names[0], names[1]
-    if len(names) == 1:
-        return names[0], None
-    return None, None
+    details = [_pitcher_details(item) for item in raw]
+    details = [item for item in details if item.get("name")]
+    if len(details) >= 2:
+        return details[0], details[1]
+    if len(details) == 1:
+        return details[0], {}
+    return {}, {}
 
 
-def _fetch_yahoo_games(target_date: date) -> list[dict]:
+def _fetch_yahoo_scoreboard(target_date: date) -> tuple[list[dict], dict[str, dict]]:
     try:
         response = httpx.get(
             YAHOO_MLB_SCOREBOARD_API,
-            params={
-                "leagues": "mlb",
-                "date": target_date.isoformat(),
-            },
+            params={"leagues": "mlb", "date": target_date.isoformat()},
             headers={
                 "User-Agent": (
                     "Mozilla/5.0 (compatible; SportsIntel/1.0; "
@@ -154,15 +177,51 @@ def _fetch_yahoo_games(target_date: date) -> list[dict]:
             timeout=12,
         )
         response.raise_for_status()
-        payload = response.json()
-        games = (
-            payload.get("service", {})
-            .get("scoreboard", {})
-            .get("games", {})
+        scoreboard = response.json().get("service", {}).get("scoreboard", {})
+        games = scoreboard.get("games", {})
+        byline = scoreboard.get("gamebyline", {})
+        return (
+            [game for game in games.values() if isinstance(game, dict)],
+            {str(key): value for key, value in byline.items() if isinstance(value, dict)},
         )
-        return [game for game in games.values() if isinstance(game, dict)]
     except (httpx.HTTPError, ValueError, AttributeError):
-        return []
+        return [], {}
+
+
+def _merge_details(primary: dict, secondary: Any) -> dict:
+    secondary_details = _pitcher_details(secondary)
+    return {
+        "name": primary.get("name") or secondary_details.get("name"),
+        "player_id": primary.get("player_id") or secondary_details.get("player_id"),
+        "stats": {
+            **secondary_details.get("stats", {}),
+            **primary.get("stats", {}),
+        },
+    }
+
+
+def _stat_value(details: dict, *names: str) -> str | None:
+    stats = details.get("stats", {})
+    for name in names:
+        value = stats.get(name.upper())
+        if value not in (None, ""):
+            return str(value)
+    return None
+
+
+def _display_stats(details: dict) -> dict:
+    wins = _stat_value(details, "W", "WINS")
+    losses = _stat_value(details, "L", "LOSSES")
+    record = _stat_value(details, "RECORD")
+    if not record and wins is not None and losses is not None:
+        record = f"{wins}-{losses}"
+
+    return {
+        "record": record,
+        "era": _stat_value(details, "ERA"),
+        "whip": _stat_value(details, "WHIP"),
+        "throws": _stat_value(details, "THROWS", "HANDEDNESS"),
+    }
 
 
 def _source_label(away_source: str, home_source: str) -> str:
@@ -210,12 +269,14 @@ def _status(
 
 
 def apply_yahoo_probable_pitchers(games: list[dict]) -> None:
-    """Fill missing MLB probable pitchers from Yahoo without changing confidence."""
-    yahoo_games = _fetch_yahoo_games(date.today())
+    """Fill missing pitchers and attach Yahoo pitcher stats without changing confidence."""
+    yahoo_games, game_byline = _fetch_yahoo_scoreboard(date.today())
 
     for game in games:
         away_source = "mlb" if game.get("away_pitcher") else "unavailable"
         home_source = "mlb" if game.get("home_pitcher") else "unavailable"
+        away_details: dict = {}
+        home_details: dict = {}
 
         matching_yahoo_game = next(
             (
@@ -228,19 +289,25 @@ def apply_yahoo_probable_pitchers(games: list[dict]) -> None:
         )
 
         if matching_yahoo_game:
-            yahoo_away, yahoo_home = _extract_ordered_pitchers(matching_yahoo_game)
+            away_details, home_details = _extract_ordered_pitchers(matching_yahoo_game)
+            yahoo_game_id = str(matching_yahoo_game.get("gameid", ""))
+            byline = game_byline.get(yahoo_game_id, {})
+            away_details = _merge_details(away_details, byline.get("away_pitcher"))
+            home_details = _merge_details(home_details, byline.get("home_pitcher"))
 
-            if not game.get("away_pitcher") and yahoo_away:
-                game["away_pitcher"] = yahoo_away
+            if not game.get("away_pitcher") and away_details.get("name"):
+                game["away_pitcher"] = away_details["name"]
                 away_source = "yahoo"
 
-            if not game.get("home_pitcher") and yahoo_home:
-                game["home_pitcher"] = yahoo_home
+            if not game.get("home_pitcher") and home_details.get("name"):
+                game["home_pitcher"] = home_details["name"]
                 home_source = "yahoo"
 
         game["away_pitcher_source"] = away_source
         game["home_pitcher_source"] = home_source
         game["pitcher_source_label"] = _source_label(away_source, home_source)
+        game["away_pitcher_stats"] = _display_stats(away_details)
+        game["home_pitcher_stats"] = _display_stats(home_details)
         game["pitcher_status"] = _status(
             game.get("away_pitcher"),
             game.get("home_pitcher"),
