@@ -81,3 +81,40 @@ button { background:var(--accent); color:#ffffff; border:0; border-radius:10px; 
 .primary-link:hover, .top-nav a:hover, .breaking-headline:hover { text-decoration:underline; }
 .card:hover { box-shadow:0 12px 30px rgba(16,36,62,.09); }
 .game-analysis .card { background:#ffffff; }
+
+.back-link, .top-nav-link { color:var(--accent); font-weight:800; }
+.game-analysis { max-width:900px; margin:auto; padding:28px; }
+.game-summary { display:grid; grid-template-columns:minmax(0,1fr) 220px; gap:28px; align-items:center; padding-bottom:28px; border-bottom:1px solid var(--line); }
+.matchup { margin-top:10px; color:var(--muted); font-size:18px; font-weight:700; }
+.game-pick-label { margin-top:24px; color:var(--muted); font-size:13px; font-weight:800; text-transform:uppercase; letter-spacing:.08em; }
+.game-pick { margin-top:6px; font-size:clamp(42px,7vw,68px); font-weight:900; line-height:1; }
+.game-probability { margin:12px 0 0; color:var(--muted); }
+.confidence-panel { padding:22px; border:1px solid var(--line); border-radius:16px; background:#f8fafc; }
+.confidence-panel > span { display:block; font-size:13px; font-weight:900; text-transform:uppercase; letter-spacing:.06em; }
+.confidence-panel > strong { display:block; margin:8px 0 12px; font-size:42px; line-height:1; }
+.confidence-panel.high { background:var(--soft-green); border-color:#bfe8d4; }
+.confidence-panel.high > span, .confidence-panel.high > strong { color:var(--good); }
+.confidence-panel.medium { background:#fff8e8; border-color:#f2dca5; }
+.confidence-panel.medium > span, .confidence-panel.medium > strong { color:#9a6b00; }
+.confidence-panel.low { background:#fff0ee; border-color:#efc7c0; }
+.confidence-panel.low > span, .confidence-panel.low > strong { color:var(--danger); }
+.why-section, .game-news-section { margin-top:28px; }
+.clean-reasons { display:grid; gap:10px; margin:0; padding-left:22px; }
+.clean-reasons li { padding-left:4px; }
+.market-grid { display:grid; grid-template-columns:repeat(3,1fr); gap:12px; margin-top:24px; }
+.market-card { display:grid; gap:8px; padding:16px; border:1px solid var(--line); border-radius:14px; background:#fbfdff; }
+.market-card span { color:var(--muted); font-size:12px; font-weight:900; text-transform:uppercase; letter-spacing:.06em; }
+.market-card strong { font-size:19px; line-height:1.25; }
+.market-card small { color:var(--muted); }
+.game-news-list { display:grid; gap:10px; }
+.game-news-item { display:grid; gap:6px; padding:14px 0; border-bottom:1px solid var(--line); }
+.game-news-item:last-child { border-bottom:0; }
+.game-news-item > span { font-weight:800; line-height:1.4; }
+.game-news-item > small { font-weight:900; text-transform:uppercase; letter-spacing:.05em; }
+.game-news-item:hover > span { color:var(--accent); }
+@media (max-width:760px){
+  .game-analysis { padding:20px; }
+  .game-summary { grid-template-columns:1fr; }
+  .market-grid { grid-template-columns:1fr; }
+  .confidence-panel { max-width:none; }
+}
