@@ -30,13 +30,13 @@ SPORT_CATALOG: dict[str, dict[str, Any]] = {
     "nfl": {
         "sport": "nfl",
         "display_name": "National Football League",
-        "status": "stub",
+        "status": "available",
         "endpoint": "/api/sports/nfl",
         "legacy_endpoint": None,
         "capabilities": {
-            "moneyline": False,
-            "spread": False,
-            "totals": False,
+            "moneyline": True,
+            "spread": True,
+            "totals": True,
             "player_props": False,
             "live": False,
             "standings": False,
