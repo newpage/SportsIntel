@@ -14,11 +14,26 @@ type ConfidenceDetailsData = {
   factors: ConfidenceFactor[];
 };
 
+type PredictionFactor = {
+  factor_id: string;
+  name: string;
+  category: string;
+  score: number;
+  weight: number;
+  explanation: string;
+  direction: string;
+  reliability: number;
+  used_in_confidence: boolean;
+};
+
 type Props = {
   confidence: number;
   stars: string;
   recommendation: string;
   details: ConfidenceDetailsData;
+  predictionFactors?: PredictionFactor[];
+  factorEngineVersion?: string;
+  factorEngineAffectsConfidence?: boolean;
   variant?: "hero" | "panel";
 };
 
@@ -35,6 +50,9 @@ export function ConfidenceDetails({
   stars,
   recommendation,
   details,
+  predictionFactors = [],
+  factorEngineVersion,
+  factorEngineAffectsConfidence = false,
   variant = "panel",
 }: Props) {
   const [open, setOpen] = useState(false);
@@ -108,6 +126,36 @@ export function ConfidenceDetails({
             </article>
           ))}
         </div>
+
+        {predictionFactors.length > 0 && (
+          <section className="model-factor-section">
+            <div className="model-factor-heading">
+              <div>
+                <strong>Model factors</strong>
+                <span>{factorEngineVersion || "Prediction factor engine"}</span>
+              </div>
+              <span className={factorEngineAffectsConfidence ? "factor-engine-live" : "factor-engine-observe"}>
+                {factorEngineAffectsConfidence ? "Live scoring" : "Observation only"}
+              </span>
+            </div>
+
+            <div className="model-factor-list">
+              {predictionFactors.map((factor) => (
+                <article className="model-factor-row" key={factor.factor_id}>
+                  <div className="model-factor-row-heading">
+                    <strong>{factor.name}</strong>
+                    <span>{factor.used_in_confidence ? "Used now" : "Not scored yet"}</span>
+                  </div>
+                  <div className="model-factor-meta">
+                    <span>Direction: {factor.direction}</span>
+                    <span>Reliability: {Math.round(factor.reliability * 100)}%</span>
+                  </div>
+                  <p>{factor.explanation}</p>
+                </article>
+              ))}
+            </div>
+          </section>
+        )}
 
         <div className="confidence-modal-summary">
           <strong>Overall summary</strong>

@@ -404,3 +404,73 @@ button:focus-visible,a:focus-visible { outline:none; box-shadow:var(--focus-ring
   margin-top:4px;
 }
 
+/* Prediction Factor Engine popup */
+.model-factor-section {
+  margin-top:20px;
+  padding-top:18px;
+  border-top:1px solid var(--line);
+}
+.model-factor-heading {
+  display:flex;
+  align-items:flex-start;
+  justify-content:space-between;
+  gap:12px;
+  margin-bottom:12px;
+}
+.model-factor-heading > div {
+  display:flex;
+  flex-direction:column;
+  gap:2px;
+}
+.model-factor-heading > div > span {
+  color:var(--muted);
+  font-size:12px;
+}
+.factor-engine-live,
+.factor-engine-observe {
+  border-radius:999px;
+  padding:5px 9px;
+  font-size:11px;
+  font-weight:800;
+  white-space:nowrap;
+}
+.factor-engine-live {
+  background:rgba(22,163,74,.12);
+}
+.factor-engine-observe {
+  background:rgba(100,116,139,.14);
+}
+.model-factor-list {
+  display:grid;
+  gap:10px;
+}
+.model-factor-row {
+  padding:12px 14px;
+  border:1px solid var(--line);
+  border-radius:14px;
+  background:var(--surface-soft);
+}
+.model-factor-row-heading,
+.model-factor-meta {
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap:10px;
+  flex-wrap:wrap;
+}
+.model-factor-row-heading > span {
+  color:var(--muted);
+  font-size:11px;
+  font-weight:800;
+  text-transform:uppercase;
+}
+.model-factor-meta {
+  margin-top:6px;
+  color:var(--muted);
+  font-size:12px;
+}
+.model-factor-row p {
+  margin:8px 0 0;
+  line-height:1.45;
+}
+
