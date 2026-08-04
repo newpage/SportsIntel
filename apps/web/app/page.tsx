@@ -38,6 +38,7 @@ export default async function HomePage() {
         </div>
         <nav className="top-nav">
           <Link href="/">NFL</Link>
+          <Link href="/nfl/review">Readiness</Link>
           <Link href="/mlb">MLB</Link>
           <Link href="/my-picks">My Picks</Link>
         </nav>

@@ -73,3 +73,33 @@ export type SportHomeResponse = {
   games: SportGameEnvelope[];
   provider: Record<string, unknown>;
 };
+
+export type NflReviewCoverage = {
+  team_health: number;
+  team_intelligence: number;
+  prediction_waterfall: number;
+  complete_games: number;
+};
+
+export type NflReviewResponse = {
+  sport: "nfl";
+  review_version: string;
+  date?: string | null;
+  game_count: number;
+  average_confidence?: number | null;
+  confidence_range: {
+    minimum?: number | null;
+    maximum?: number | null;
+  };
+  coverage: NflReviewCoverage;
+  context: {
+    preseason_games: number;
+    market_available_games: number;
+    guardrail_applied_games: number;
+    quarterbacks_announced_games: number;
+  };
+  readiness_distribution: Record<string, number>;
+  market_signal_distribution: Record<string, number>;
+  prediction_impact: Record<string, boolean>;
+  status: "ready_for_review" | "partial" | string;
+};

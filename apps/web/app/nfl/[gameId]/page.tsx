@@ -164,6 +164,7 @@ export default async function NflGamePage({
         <Link className="back-link" href="/">← NFL</Link>
         <nav className="top-nav">
           <Link href="/">NFL</Link>
+          <Link href="/nfl/review">Readiness</Link>
           <Link href="/mlb">MLB</Link>
           <Link href="/my-picks">My Picks</Link>
         </nav>

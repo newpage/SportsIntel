@@ -67,3 +67,15 @@ export async function getSport(sport: string) {
 
   return response.json();
 }
+
+export async function getNflReview() {
+  const response = await fetch(`${API_URL}/api/sports/nfl/review`, {
+    cache: "no-store",
+  });
+
+  if (!response.ok) {
+    throw new Error("Unable to load NFL readiness review");
+  }
+
+  return response.json();
+}
