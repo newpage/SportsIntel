@@ -4,6 +4,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from app.engine import all_predictions
 from app.news import fetch_yahoo_nfl_news
 from app.mlb import mlb_game, mlb_home, mlb_results
+from app.intelligence.nfl_review import build_nfl_review
 from app.sports_api import (
     sport_capabilities,
     sports_catalog,
@@ -55,6 +56,11 @@ def sports_capabilities(sport: str):
 @app.get("/api/sports/{sport}")
 def sport_home(sport: str):
     return sports_home(sport)
+
+
+@app.get("/api/sports/nfl/review")
+def nfl_review():
+    return build_nfl_review(sports_home("nfl"))
 
 
 @app.get("/api/mlb")
