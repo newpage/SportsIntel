@@ -28,6 +28,59 @@ def _save(payload: dict[str, list[dict]]) -> None:
     temporary.replace(_HISTORY_PATH)
 
 
+
+
+def _factor_snapshot(game: dict) -> dict[str, dict]:
+    snapshot: dict[str, dict] = {}
+    for factor in game.get("prediction_factors", []):
+        factor_id = factor.get("factor_id")
+        if not factor_id:
+            continue
+        snapshot[str(factor_id)] = {
+            "name": factor.get("name"),
+            "score": factor.get("score"),
+            "weight": factor.get("weight"),
+            "direction": factor.get("direction"),
+            "reliability": factor.get("reliability"),
+            "used_in_confidence": factor.get("used_in_confidence"),
+        }
+    return snapshot
+
+
+def _factor_change_summary(
+    current: dict[str, dict],
+    previous: dict[str, dict],
+) -> list[str]:
+    changes: list[str] = []
+
+    for factor_id, current_factor in current.items():
+        previous_factor = previous.get(factor_id)
+        if previous_factor is None:
+            changes.append(
+                f"{current_factor.get('name') or factor_id} factor became available."
+            )
+            continue
+
+        changed_fields: list[str] = []
+        for field in ("score", "direction", "reliability", "used_in_confidence"):
+            if current_factor.get(field) != previous_factor.get(field):
+                changed_fields.append(field)
+
+        if changed_fields:
+            changes.append(
+                f"{current_factor.get('name') or factor_id} changed "
+                f"({', '.join(changed_fields)})."
+            )
+
+    for factor_id, previous_factor in previous.items():
+        if factor_id not in current:
+            changes.append(
+                f"{previous_factor.get('name') or factor_id} factor is no longer available."
+            )
+
+    return changes
+
+
 def _event_reason(game: dict, previous: dict | None) -> str | None:
     if previous is None:
         return "Initial SportsIntel prediction."
@@ -46,6 +99,16 @@ def _event_reason(game: dict, previous: dict | None) -> str | None:
     if previous_pitcher_status != current_pitcher_status:
         label = game.get("pitcher_status", {}).get("label", "Updated")
         reasons.append(f"Probable pitcher status changed to {label}.")
+
+    current_factors = _factor_snapshot(game)
+    previous_factors = previous.get("factor_snapshot", {})
+    factor_changes = _factor_change_summary(current_factors, previous_factors)
+
+    if factor_changes:
+        if previous_factors:
+            reasons.extend(factor_changes[:3])
+        else:
+            reasons.append("Prediction factor snapshot initialized.")
 
     return " ".join(reasons) or None
 
@@ -67,6 +130,8 @@ def attach_prediction_history(games: list[dict]) -> None:
                     "confidence": int(game["confidence"]),
                     "pitcher_status": game.get("pitcher_status", {}).get("code"),
                     "pitcher_status_label": game.get("pitcher_status", {}).get("label"),
+                    "factor_engine_version": game.get("factor_engine_version"),
+                    "factor_snapshot": _factor_snapshot(game),
                     "reason": reason,
                 })
                 history[game_id] = events[-_MAX_EVENTS_PER_GAME:]
@@ -79,6 +144,11 @@ def attach_prediction_history(games: list[dict]) -> None:
                 game["confidence_change"] = 0
 
             game["prediction_timeline"] = list(reversed(current_events[-8:]))
+            game["latest_factor_snapshot"] = (
+                current_events[-1].get("factor_snapshot", {})
+                if current_events
+                else {}
+            )
 
         if changed:
             _save(history)
