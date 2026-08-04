@@ -35,6 +35,48 @@ TEAM_RATINGS: dict[str, float] = {
     "Washington Commanders": 57.0,
 }
 
+
+NFL_TEAM_ALIASES: dict[str, str] = {
+    "Arizona": "Arizona Cardinals",
+    "Atlanta": "Atlanta Falcons",
+    "Baltimore": "Baltimore Ravens",
+    "Buffalo": "Buffalo Bills",
+    "Carolina": "Carolina Panthers",
+    "Chicago": "Chicago Bears",
+    "Cincinnati": "Cincinnati Bengals",
+    "Cleveland": "Cleveland Browns",
+    "Dallas": "Dallas Cowboys",
+    "Denver": "Denver Broncos",
+    "Detroit": "Detroit Lions",
+    "Green Bay": "Green Bay Packers",
+    "Houston": "Houston Texans",
+    "Indianapolis": "Indianapolis Colts",
+    "Jacksonville": "Jacksonville Jaguars",
+    "Kansas City": "Kansas City Chiefs",
+    "LA Chargers": "Los Angeles Chargers",
+    "LA Rams": "Los Angeles Rams",
+    "Las Vegas": "Las Vegas Raiders",
+    "Miami": "Miami Dolphins",
+    "Minnesota": "Minnesota Vikings",
+    "New England": "New England Patriots",
+    "New Orleans": "New Orleans Saints",
+    "NY Giants": "New York Giants",
+    "NY Jets": "New York Jets",
+    "Philadelphia": "Philadelphia Eagles",
+    "Pittsburgh": "Pittsburgh Steelers",
+    "San Francisco": "San Francisco 49ers",
+    "Seattle": "Seattle Seahawks",
+    "Tampa Bay": "Tampa Bay Buccaneers",
+    "Tennessee": "Tennessee Titans",
+    "Washington": "Washington Commanders",
+}
+
+
+def normalize_team_name(team_name: str) -> str:
+    normalized = team_name.strip()
+    return NFL_TEAM_ALIASES.get(normalized, normalized)
+
+
 DEFAULT_TEAM_RATING = 50.0
 HOME_FIELD_RATING = 1.5
 RATING_VERSION = "nfl-provisional-ratings-v1"

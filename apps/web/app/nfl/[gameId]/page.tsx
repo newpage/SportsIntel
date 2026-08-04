@@ -94,6 +94,16 @@ export default async function NflGamePage({
       : 60;
   const guardrailApplied =
     metadata.confidence_guardrail_applied === true;
+  const awayTeamNormalized =
+    typeof metadata.away_team_normalized === "string"
+      ? metadata.away_team_normalized
+      : game.away_team;
+  const homeTeamNormalized =
+    typeof metadata.home_team_normalized === "string"
+      ? metadata.home_team_normalized
+      : game.home_team;
+  const teamNameNormalized =
+    metadata.team_name_normalized === true;
 
   return (
     <main>
@@ -239,6 +249,28 @@ export default async function NflGamePage({
             </small>
           </div>
         </section>
+
+        {teamNameNormalized && (
+          <section className="mlb-detail-grid">
+            <div className="market-card">
+              <span>Away rating identity</span>
+              <strong>{game.away_team}</strong>
+              <small>Uses {awayTeamNormalized}</small>
+            </div>
+            <div className="market-card">
+              <span>Normalization</span>
+              <strong>Canonical franchise names</strong>
+              <small>
+                Yahoo display names are mapped before rating lookup.
+              </small>
+            </div>
+            <div className="market-card">
+              <span>Home rating identity</span>
+              <strong>{game.home_team}</strong>
+              <small>Uses {homeTeamNormalized}</small>
+            </div>
+          </section>
+        )}
 
         <section className="why-section">
           <div className="eyebrow">Current model explanation</div>

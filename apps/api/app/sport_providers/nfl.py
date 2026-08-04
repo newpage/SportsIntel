@@ -8,7 +8,12 @@ from typing import Any
 
 import httpx
 
-from app.sport_providers.nfl_ratings import HOME_FIELD_RATING, RATING_VERSION, team_rating
+from app.sport_providers.nfl_ratings import (
+    HOME_FIELD_RATING,
+    RATING_VERSION,
+    normalize_team_name,
+    team_rating,
+)
 from app.sports import (
     GameStatus,
     MarketPrediction,
@@ -558,8 +563,11 @@ def _fetch_schedule(target_date: date | None = None) -> list[SportGame]:
 
 
 def _moneyline_prediction(game: SportGame) -> SportPrediction:
-    away_rating = team_rating(game.away_team)
-    home_rating = team_rating(game.home_team)
+    away_team_normalized = normalize_team_name(game.away_team)
+    home_team_normalized = normalize_team_name(game.home_team)
+
+    away_rating = team_rating(away_team_normalized)
+    home_rating = team_rating(home_team_normalized)
     adjusted_home = home_rating + HOME_FIELD_RATING
     gap = adjusted_home - away_rating
 
@@ -619,8 +627,8 @@ def _moneyline_prediction(game: SportGame) -> SportPrediction:
             "weight": 1.0,
             "reliability": 0.5,
             "explanation": (
-                f"{game.away_team} rating: {away_rating:.1f}; "
-                f"{game.home_team} rating: {home_rating:.1f}."
+                f"{away_team_normalized} rating: {away_rating:.1f}; "
+                f"{home_team_normalized} rating: {home_rating:.1f}."
             ),
             "direction": "home" if gap > 0 else "away" if gap < 0 else "neutral",
             "usage": "active",
@@ -723,6 +731,14 @@ def _moneyline_prediction(game: SportGame) -> SportPrediction:
             "prediction_available": True,
             "prediction_scope": "moneyline_only",
             "rating_version": RATING_VERSION,
+            "away_team_original": game.away_team,
+            "away_team_normalized": away_team_normalized,
+            "home_team_original": game.home_team,
+            "home_team_normalized": home_team_normalized,
+            "team_name_normalized": (
+                away_team_normalized != game.away_team
+                or home_team_normalized != game.home_team
+            ),
             "away_rating": away_rating,
             "home_rating": home_rating,
             "home_field_rating": HOME_FIELD_RATING,
