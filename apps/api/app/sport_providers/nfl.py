@@ -150,21 +150,63 @@ def _reference_id(value: Any, prefix: str) -> str | None:
     return None
 
 
-def _yahoo_team_name(teams: dict[str, Any], value: Any) -> str | None:
+
+def _indexed_collection(value: Any, id_prefix: str) -> dict[str, dict[str, Any]]:
+    if isinstance(value, dict):
+        return {
+            str(key): item
+            for key, item in value.items()
+            if isinstance(item, dict)
+        }
+
+    if not isinstance(value, list):
+        return {}
+
+    indexed: dict[str, dict[str, Any]] = {}
+    for position, item in enumerate(value):
+        if not isinstance(item, dict):
+            continue
+
+        item_id = (
+            item.get("gameid")
+            or item.get("game_id")
+            or item.get("team_id")
+            or item.get("id")
+            or _reference_id(item, id_prefix)
+            or f"{id_prefix}{position}"
+        )
+        indexed[str(item_id)] = item
+
+    return indexed
+
+
+def _collection_item(collection: Any, item_id: str, id_prefix: str) -> dict[str, Any]:
+    return _indexed_collection(collection, id_prefix).get(item_id, {})
+
+def _yahoo_team_name(teams: Any, value: Any) -> str | None:
     team_id = _reference_id(value, "nfl.t.")
-    team = teams.get(team_id, {}) if team_id else {}
+    team = _collection_item(teams, team_id, "nfl.t.") if team_id else {}
+
     if isinstance(value, dict):
         team = {**value, **team}
 
-    for key in ("display_name", "full_name", "name", "short_name", "nickname"):
+    for key in (
+        "display_name",
+        "full_name",
+        "name",
+        "short_name",
+        "nickname",
+        "team_name",
+    ):
         candidate = team.get(key)
         if candidate:
             return str(candidate)
 
-    city = team.get("city") or team.get("location")
-    nickname = team.get("nickname")
+    city = team.get("city") or team.get("location") or team.get("team_location")
+    nickname = team.get("nickname") or team.get("team_nickname")
     if city and nickname:
         return f"{city} {nickname}"
+
     return None
 
 
@@ -174,7 +216,11 @@ def _yahoo_game(
     scoreboard: dict[str, Any],
 ) -> SportGame | None:
     teams = scoreboard.get("teams", {})
-    byline = scoreboard.get("gamebyline", {}).get(game_id, {})
+    byline = _collection_item(
+        scoreboard.get("gamebyline", {}),
+        game_id,
+        "nfl.g.",
+    )
 
     away_value = (
         payload.get("away_team")
@@ -270,13 +316,12 @@ def _fetch_yahoo_schedule(target_date: date | None = None) -> list[SportGame]:
                 .get("service", {})
                 .get("scoreboard", {})
             )
-            raw_games = scoreboard.get("games", {})
-            if not isinstance(raw_games, dict):
-                continue
+            raw_games = _indexed_collection(
+                scoreboard.get("games", {}),
+                "nfl.g.",
+            )
 
             for game_id, payload in raw_games.items():
-                if not isinstance(payload, dict):
-                    continue
                 game = _yahoo_game(str(game_id), payload, scoreboard)
                 if game:
                     games_by_id[game.game_id] = game
