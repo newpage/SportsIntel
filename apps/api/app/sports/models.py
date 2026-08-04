@@ -5,6 +5,9 @@ from datetime import datetime
 from enum import StrEnum
 from typing import Any
 
+from app.sports.history import PredictionHistoryEvent
+from app.sports.markets import MarketPrediction
+
 
 class GameStatus(StrEnum):
     SCHEDULED = "scheduled"
@@ -74,10 +77,22 @@ class SportPrediction:
     confidence: int | None
     recommendation: str | None = None
     factors: list[dict[str, Any]] = field(default_factory=list)
-    timeline: list[dict[str, Any]] = field(default_factory=list)
-    markets: dict[str, Any] = field(default_factory=dict)
+    timeline: list[dict[str, Any] | PredictionHistoryEvent] = field(default_factory=list)
+    markets: dict[str, Any] | list[MarketPrediction] = field(default_factory=dict)
     explanation: dict[str, Any] = field(default_factory=dict)
+    model_version: str | None = None
+    shadow_prediction: dict[str, Any] | None = None
     metadata: dict[str, Any] = field(default_factory=dict)
 
     def to_dict(self) -> dict[str, Any]:
-        return asdict(self)
+        payload = asdict(self)
+        payload["timeline"] = [
+            event.to_dict() if isinstance(event, PredictionHistoryEvent) else event
+            for event in self.timeline
+        ]
+        if isinstance(self.markets, list):
+            payload["markets"] = [
+                market.to_dict() if isinstance(market, MarketPrediction) else market
+                for market in self.markets
+            ]
+        return payload
