@@ -146,6 +146,26 @@ export default async function NflGamePage({
     typeof metadata.market_signal_summary === "string"
       ? metadata.market_signal_summary
       : "A complete moneyline market is not available.";
+  const consensus =
+    metadata.consensus && typeof metadata.consensus === "object"
+      ? (metadata.consensus as Record<string, unknown>)
+      : null;
+  const consensusClassification =
+    typeof consensus?.classification === "string"
+      ? consensus.classification
+      : "Market unavailable";
+  const consensusAgreement =
+    typeof consensus?.agreement === "string"
+      ? consensus.agreement
+      : "unavailable";
+  const consensusMarketFavorite =
+    typeof consensus?.market_favorite === "string"
+      ? consensus.market_favorite
+      : null;
+  const consensusSummary =
+    typeof consensus?.summary === "string"
+      ? consensus.summary
+      : "A complete no-vig moneyline market is not available.";
   const predictionWaterfall =
     metadata.prediction_waterfall &&
     typeof metadata.prediction_waterfall === "object"
@@ -380,6 +400,32 @@ export default async function NflGamePage({
               <span>Market signal</span>
               <strong>{marketSignalLabel}</strong>
               <small>{marketSignalSummary}</small>
+            </div>
+          </section>
+        )}
+
+        {marketAvailable && consensus && (
+          <section className="mlb-detail-grid">
+            <div className="market-card">
+              <span>Consensus</span>
+              <strong>{consensusClassification}</strong>
+              <small>{consensusSummary}</small>
+            </div>
+            <div className="market-card">
+              <span>Model and market</span>
+              <strong>
+                {consensusAgreement === "agree"
+                  ? "Agreement"
+                  : consensusAgreement === "split"
+                    ? "Different favorites"
+                    : "Market even"}
+              </strong>
+              <small>Observation only</small>
+            </div>
+            <div className="market-card">
+              <span>Market favorite</span>
+              <strong>{consensusMarketFavorite || "Even market"}</strong>
+              <small>Does not change the SportsIntel pick</small>
             </div>
           </section>
         )}

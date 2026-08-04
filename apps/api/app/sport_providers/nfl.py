@@ -11,6 +11,7 @@ import httpx
 
 from app.intelligence import (
     TeamHealthEngine,
+    build_consensus_line,
     build_prediction_waterfall,
     build_team_intelligence,
 )
@@ -656,7 +657,6 @@ def _yahoo_game(
             "qb_affects_prediction": False,
             "market": market,
             "market_affects_prediction": False,
-            "prediction_waterfall": prediction_waterfall.to_dict(),
         },
     )
 
@@ -997,6 +997,23 @@ def _moneyline_prediction(game: SportGame) -> SportPrediction:
         market_edge,
         pick,
         market_pick_probability,
+    )
+
+    consensus = build_consensus_line(
+        model_pick=pick,
+        away_team=game.away_team,
+        home_team=game.home_team,
+        model_probability=model_pick_probability,
+        away_market_probability=(
+            market.get("away_no_vig_probability")
+            if market_available
+            else None
+        ),
+        home_market_probability=(
+            market.get("home_no_vig_probability")
+            if market_available
+            else None
+        ),
     )
 
     away_team_intelligence = build_team_intelligence(
@@ -1344,6 +1361,8 @@ def _moneyline_prediction(game: SportGame) -> SportPrediction:
             "model_market_relationship": market_signal["model_market_relationship"],
             "market_betting_recommendation": market_signal["betting_recommendation"],
             "market_affects_prediction": False,
+            "consensus": consensus.to_dict(),
+            "consensus_affects_prediction": False,
         },
     )
 
