@@ -30,7 +30,7 @@ SPORT_CATALOG: dict[str, dict[str, Any]] = {
     "nfl": {
         "sport": "nfl",
         "display_name": "National Football League",
-        "status": "planned",
+        "status": "stub",
         "endpoint": "/api/sports/nfl",
         "legacy_endpoint": None,
         "capabilities": {
@@ -99,6 +99,10 @@ def _ensure_provider(sport: str) -> SportProvider:
     if sport_key == "mlb":
         from app.sport_providers.mlb import register_mlb_provider
         return register_mlb_provider(sports_registry)
+
+    if sport_key == "nfl":
+        from app.sport_providers.nfl import register_nfl_provider
+        return register_nfl_provider(sports_registry)
 
     raise HTTPException(status_code=404, detail=f"Unsupported sport: {sport_key}")
 
