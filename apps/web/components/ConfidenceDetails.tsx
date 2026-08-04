@@ -26,12 +26,24 @@ type PredictionFactor = {
   used_in_confidence: boolean;
 };
 
+type ModelCoverage = {
+  active_factors: number;
+  observation_only_factors: number;
+  total_factors: number;
+  average_reliability: number;
+  coverage_percent: number;
+  status: string;
+  missing_planned_areas: string[];
+  summary: string;
+};
+
 type Props = {
   confidence: number;
   stars: string;
   recommendation: string;
   details: ConfidenceDetailsData;
   predictionFactors?: PredictionFactor[];
+  modelCoverage?: ModelCoverage;
   factorEngineVersion?: string;
   factorEngineAffectsConfidence?: boolean;
   variant?: "hero" | "panel";
@@ -51,6 +63,7 @@ export function ConfidenceDetails({
   recommendation,
   details,
   predictionFactors = [],
+  modelCoverage,
   factorEngineVersion,
   factorEngineAffectsConfidence = false,
   variant = "panel",
@@ -138,6 +151,36 @@ export function ConfidenceDetails({
                 {factorEngineAffectsConfidence ? "Live scoring" : "Observation only"}
               </span>
             </div>
+
+            {modelCoverage && (
+              <div className="model-coverage-card">
+                <div className="model-coverage-topline">
+                  <div>
+                    <span>Model coverage</span>
+                    <strong>{modelCoverage.status}</strong>
+                  </div>
+                  <strong>{modelCoverage.coverage_percent}%</strong>
+                </div>
+                <div
+                  className="model-coverage-track"
+                  aria-label={`${modelCoverage.coverage_percent}% model coverage`}
+                >
+                  <span style={{ width: `${modelCoverage.coverage_percent}%` }} />
+                </div>
+                <div className="model-coverage-metrics">
+                  <span>{modelCoverage.active_factors} active</span>
+                  <span>{modelCoverage.observation_only_factors} observation-only</span>
+                  <span>{Math.round(modelCoverage.average_reliability * 100)}% avg reliability</span>
+                </div>
+                <p>{modelCoverage.summary}</p>
+                {modelCoverage.missing_planned_areas.length > 0 && (
+                  <div className="model-coverage-missing">
+                    <strong>Planned next:</strong>
+                    <span>{modelCoverage.missing_planned_areas.join(" · ")}</span>
+                  </div>
+                )}
+              </div>
+            )}
 
             <div className="model-factor-list">
               {predictionFactors.map((factor) => (

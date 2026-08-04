@@ -111,8 +111,66 @@ def build_mlb_prediction_factors(game: dict) -> list[dict]:
     return output
 
 
+
+
+def _model_coverage(factors: list[dict]) -> dict:
+    active = [factor for factor in factors if factor.get("used_in_confidence")]
+    observation_only = [
+        factor for factor in factors if not factor.get("used_in_confidence")
+    ]
+    reliable = [
+        float(factor.get("reliability", 0.0))
+        for factor in factors
+        if factor.get("reliability") is not None
+    ]
+    average_reliability = (
+        round(sum(reliable) / len(reliable), 3)
+        if reliable
+        else 0.0
+    )
+
+    planned_categories = [
+        "Bullpen",
+        "Offense",
+        "Defense",
+        "Weather",
+        "Injuries",
+        "Market",
+    ]
+
+    return {
+        "active_factors": len(active),
+        "observation_only_factors": len(observation_only),
+        "total_factors": len(factors),
+        "average_reliability": average_reliability,
+        "coverage_percent": round(
+            min(100, (len(active) / 10) * 100)
+        ),
+        "status": (
+            "Foundation"
+            if len(active) < 5
+            else "Developing"
+            if len(active) < 8
+            else "Broad"
+        ),
+        "missing_planned_areas": planned_categories,
+        "summary": (
+            f"{len(active)} factors currently influence confidence and "
+            f"{len(observation_only)} factor is observation-only."
+            if len(observation_only) == 1
+            else (
+                f"{len(active)} factors currently influence confidence and "
+                f"{len(observation_only)} factors are observation-only."
+            )
+        ),
+    }
+
+
 def attach_mlb_prediction_factors(games: list[dict]) -> None:
     for game in games:
         game["prediction_factors"] = build_mlb_prediction_factors(game)
+        game["factor_model_coverage"] = _model_coverage(
+            game["prediction_factors"]
+        )
         game["factor_engine_version"] = "mlb-factors-v1"
         game["factor_engine_affects_confidence"] = False

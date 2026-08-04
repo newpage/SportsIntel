@@ -504,3 +504,65 @@ button:focus-visible,a:focus-visible { outline:none; box-shadow:var(--focus-ring
   border-color:rgba(220,38,38,.24);
 }
 
+/* Prediction model coverage */
+.model-coverage-card {
+  margin-bottom:14px;
+  padding:14px;
+  border:1px solid var(--line);
+  border-radius:14px;
+  background:var(--surface-soft);
+}
+.model-coverage-topline {
+  display:flex;
+  align-items:flex-end;
+  justify-content:space-between;
+  gap:12px;
+}
+.model-coverage-topline > div {
+  display:flex;
+  flex-direction:column;
+  gap:2px;
+}
+.model-coverage-topline span {
+  color:var(--muted);
+  font-size:11px;
+  font-weight:800;
+  text-transform:uppercase;
+  letter-spacing:.05em;
+}
+.model-coverage-topline > strong {
+  font-size:22px;
+}
+.model-coverage-track {
+  height:8px;
+  margin-top:10px;
+  overflow:hidden;
+  border-radius:999px;
+  background:rgba(100,116,139,.18);
+}
+.model-coverage-track > span {
+  display:block;
+  height:100%;
+  border-radius:inherit;
+  background:currentColor;
+}
+.model-coverage-metrics {
+  display:flex;
+  flex-wrap:wrap;
+  gap:8px 14px;
+  margin-top:10px;
+  color:var(--muted);
+  font-size:12px;
+}
+.model-coverage-card p {
+  margin:10px 0 0;
+}
+.model-coverage-missing {
+  display:flex;
+  flex-direction:column;
+  gap:3px;
+  margin-top:10px;
+  color:var(--muted);
+  font-size:12px;
+}
+
