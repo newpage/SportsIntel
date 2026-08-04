@@ -434,6 +434,58 @@ def _first_odds_value(
     return None
 
 
+
+def _market_signal(
+    edge: float | None,
+    model_pick: str,
+    market_pick_probability: float | None,
+) -> dict[str, Any]:
+    if edge is None or market_pick_probability is None:
+        return {
+            "code": "unavailable",
+            "label": "Market unavailable",
+            "severity": "none",
+            "summary": "A complete moneyline market is not available.",
+            "model_market_relationship": "unknown",
+            "betting_recommendation": False,
+        }
+
+    magnitude = abs(edge)
+    if magnitude < 0.02:
+        code, label, severity = "aligned", "Market aligned", "low"
+    elif magnitude < 0.05:
+        code, label, severity = "small_difference", "Small difference", "low"
+    elif magnitude < 0.08:
+        code, label, severity = "notable_difference", "Notable difference", "medium"
+    else:
+        code, label, severity = "large_disagreement", "Large disagreement", "high"
+
+    if edge > 0:
+        relationship = "model_more_confident"
+        summary = (
+            f"SportsIntel is more confident in {model_pick} than "
+            "the no-vig market."
+        )
+    elif edge < 0:
+        relationship = "market_more_confident"
+        summary = (
+            f"The no-vig market is more confident in {model_pick} "
+            "than SportsIntel."
+        )
+    else:
+        relationship = "aligned"
+        summary = f"SportsIntel and the no-vig market agree on {model_pick}."
+
+    return {
+        "code": code,
+        "label": label,
+        "severity": severity,
+        "summary": summary,
+        "model_market_relationship": relationship,
+        "betting_recommendation": False,
+    }
+
+
 def _market_context(
     scoreboard: dict[str, Any],
     game_id: str,
@@ -926,6 +978,11 @@ def _moneyline_prediction(game: SportGame) -> SportPrediction:
         if isinstance(market_pick_probability, (int, float))
         else None
     )
+    market_signal = _market_signal(
+        market_edge,
+        pick,
+        market_pick_probability,
+    )
 
     factors = [
         {
@@ -1044,9 +1101,7 @@ def _moneyline_prediction(game: SportGame) -> SportPrediction:
             line=pick_moneyline,
             projected_value=probability,
             recommendation=(
-                "Positive model edge"
-                if market_edge is not None and market_edge > 0.02
-                else "Market-aligned lean"
+                market_signal["label"]
                 if market_edge is not None
                 else "Early model lean"
             ),
@@ -1182,6 +1237,12 @@ def _moneyline_prediction(game: SportGame) -> SportPrediction:
             "model_pick_probability": model_pick_probability,
             "market_pick_probability": market_pick_probability,
             "market_edge": market_edge,
+            "market_signal_code": market_signal["code"],
+            "market_signal_label": market_signal["label"],
+            "market_signal_severity": market_signal["severity"],
+            "market_signal_summary": market_signal["summary"],
+            "model_market_relationship": market_signal["model_market_relationship"],
+            "market_betting_recommendation": market_signal["betting_recommendation"],
             "market_affects_prediction": False,
         },
     )

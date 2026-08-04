@@ -138,6 +138,14 @@ export default async function NflGamePage({
     typeof metadata.market_edge === "number"
       ? metadata.market_edge
       : null;
+  const marketSignalLabel =
+    typeof metadata.market_signal_label === "string"
+      ? metadata.market_signal_label
+      : "Market unavailable";
+  const marketSignalSummary =
+    typeof metadata.market_signal_summary === "string"
+      ? metadata.market_signal_summary
+      : "A complete moneyline market is not available.";
 
   return (
     <main>
@@ -357,13 +365,9 @@ export default async function NflGamePage({
               </small>
             </div>
             <div className="market-card">
-              <span>Model edge</span>
-              <strong>
-                {marketEdge !== null
-                  ? `${marketEdge >= 0 ? "+" : ""}${(marketEdge * 100).toFixed(1)}%`
-                  : "—"}
-              </strong>
-              <small>Observation only in Sprint 12.1</small>
+              <span>Market signal</span>
+              <strong>{marketSignalLabel}</strong>
+              <small>{marketSignalSummary}</small>
             </div>
           </section>
         )}
