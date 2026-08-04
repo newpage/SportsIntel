@@ -7,6 +7,7 @@ from typing import Any
 
 import httpx
 
+from app.sport_providers.nfl_ratings import HOME_FIELD_RATING, RATING_VERSION, team_rating
 from app.sports import (
     GameStatus,
     MarketPrediction,
@@ -169,54 +170,111 @@ def _fetch_schedule(
         return []
 
 
-def _unavailable_prediction(game: SportGame) -> SportPrediction:
+
+def _moneyline_prediction(game: SportGame) -> SportPrediction:
+    away_rating = team_rating(game.away_team)
+    home_rating = team_rating(game.home_team)
+    adjusted_home = home_rating + HOME_FIELD_RATING
+    gap = adjusted_home - away_rating
+
+    pick = game.home_team if gap >= 0 else game.away_team
+    confidence = round(min(68, max(53, 54 + abs(gap) * 1.35)))
+    probability = round(min(0.68, max(0.52, 0.52 + abs(gap) / 45)), 3)
+
+    factors = [
+        {
+            "factor_id": "team_rating",
+            "name": "Provisional Team Rating",
+            "category": "team_strength",
+            "score": round(gap, 3),
+            "weight": 1.0,
+            "reliability": 0.5,
+            "explanation": (
+                f"{game.away_team} rating: {away_rating:.1f}; "
+                f"{game.home_team} rating: {home_rating:.1f}."
+            ),
+            "direction": "home" if gap > 0 else "away" if gap < 0 else "neutral",
+            "usage": "active",
+            "version": RATING_VERSION,
+            "contributes_to": ["moneyline"],
+            "used_in_confidence": True,
+        },
+        {
+            "factor_id": "home_field",
+            "name": "Home Field",
+            "category": "venue",
+            "score": HOME_FIELD_RATING,
+            "weight": 1.0,
+            "reliability": 0.7,
+            "explanation": (
+                f"{game.home_team} receives a provisional "
+                f"{HOME_FIELD_RATING:.1f}-point home-field adjustment."
+            ),
+            "direction": "home",
+            "usage": "active",
+            "version": RATING_VERSION,
+            "contributes_to": ["moneyline"],
+            "used_in_confidence": True,
+        },
+    ]
+
     markets = [
         MarketPrediction(
             market_type=MarketType.MONEYLINE,
-            selection=None,
-            confidence=None,
-            recommendation="Awaiting NFL model",
-            explanation=(
-                "The live schedule is available, but this matchup "
-                "has not yet been scored by SportsIntel."
-            ),
+            selection=pick,
+            confidence=confidence,
+            projected_value=probability,
+            recommendation="Early model lean",
+            factor_ids=("team_rating", "home_field"),
         ),
         MarketPrediction(
             market_type=MarketType.SPREAD,
             selection=None,
             confidence=None,
-            recommendation="Awaiting NFL model",
+            recommendation="Not available yet",
         ),
         MarketPrediction(
             market_type=MarketType.TOTAL,
             selection=None,
             confidence=None,
-            recommendation="Awaiting NFL model",
+            recommendation="Not available yet",
         ),
     ]
 
     return SportPrediction(
         sport="nfl",
         game_id=game.game_id,
-        pick=None,
-        confidence=None,
-        recommendation="Prediction not available yet",
-        factors=[],
+        pick=pick,
+        confidence=confidence,
+        recommendation="Early moneyline lean",
+        factors=factors,
         timeline=[],
         markets=markets,
         explanation={
-            "title": "NFL prediction pending",
+            "title": "Why SportsIntel Likes This Pick",
             "summary": (
-                "SportsIntel has the confirmed schedule for this game. "
-                "Prediction scoring will be enabled in the next NFL model phase."
+                f"SportsIntel gives {pick} an early edge based on "
+                "provisional team strength and home field only."
             ),
-            "reasons": [],
+            "reasons": [
+                f"Adjusted rating gap is {abs(gap):.1f} points in favor of {pick}.",
+                (
+                    "Confidence is intentionally capped because injuries, "
+                    "quarterback status, recent form, and market data are not included yet."
+                ),
+            ],
         },
-        model_version="nfl-schedule-v1",
+        model_version=RATING_VERSION,
         metadata={
             "data_mode": "live_schedule",
             "schedule_confirmed": True,
-            "prediction_available": False,
+            "prediction_available": True,
+            "prediction_scope": "moneyline_only",
+            "rating_version": RATING_VERSION,
+            "away_rating": away_rating,
+            "home_rating": home_rating,
+            "home_field_rating": HOME_FIELD_RATING,
+            "rating_gap": round(gap, 3),
         },
     )
 
@@ -227,7 +285,7 @@ class NFLProvider(SportProvider):
     sport_key = "nfl"
     display_name = "National Football League"
     capabilities = SportCapabilities(
-        moneyline=False,
+        moneyline=True,
         spread=False,
         totals=False,
         player_props=False,
@@ -241,7 +299,7 @@ class NFLProvider(SportProvider):
         return _fetch_schedule(target_date)
 
     def predict(self, game: SportGame) -> SportPrediction:
-        return _unavailable_prediction(game)
+        return _moneyline_prediction(game)
 
     def health(self) -> dict[str, Any]:
         payload = super().health()
@@ -253,7 +311,9 @@ class NFLProvider(SportProvider):
                 "data_available": True,
                 "data_mode": "live_schedule",
                 "schedule_confirmed": True,
-                "prediction_available": False,
+                "prediction_available": True,
+                "prediction_scope": "moneyline_only",
+                "rating_version": RATING_VERSION,
                 "cache_seconds": CACHE_SECONDS,
                 "last_error": _LAST_ERROR,
             }
