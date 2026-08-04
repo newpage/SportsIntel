@@ -9,6 +9,7 @@ from typing import Any
 
 import httpx
 
+from app.intelligence import TeamHealthEngine
 from app.sport_providers.nfl_ratings import (
     HOME_FIELD_RATING,
     RATING_VERSION,
@@ -913,6 +914,14 @@ def _moneyline_prediction(game: SportGame) -> SportPrediction:
         and away_qb.get("confirmed")
         and home_qb.get("confirmed")
     )
+    away_team_health = TeamHealthEngine.from_qb_context(
+        team=game.away_team,
+        qb_context=away_qb,
+    )
+    home_team_health = TeamHealthEngine.from_qb_context(
+        team=game.home_team,
+        qb_context=home_qb,
+    )
     records_available = bool(
         game.metadata.get("away_record")
         and game.metadata.get("home_record")
@@ -1184,6 +1193,11 @@ def _moneyline_prediction(game: SportGame) -> SportPrediction:
             "qb_announced": qb_announced,
             "qb_confirmed": qb_confirmed,
             "qb_affects_prediction": False,
+            "team_health": {
+                "away": away_team_health.to_dict(),
+                "home": home_team_health.to_dict(),
+                "affects_prediction": False,
+            },
             "records_available": records_available,
             "data_readiness_score": data_readiness_score,
             "data_readiness_label": readiness_label,
