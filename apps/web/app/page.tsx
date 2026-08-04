@@ -74,7 +74,7 @@ export default async function HomePage() {
             <h2>NFL Games</h2>
           </div>
           <span className="subtle">
-            Confidence is intentionally capped during the baseline phase.
+            Tap a game for the full baseline explanation.
           </span>
         </div>
 
@@ -94,7 +94,11 @@ export default async function HomePage() {
               const market = moneylineMarket(item);
 
               return (
-                <article className="card game" key={game.game_id}>
+                <Link
+                  className="card game"
+                  key={game.game_id}
+                  href={`/nfl/${encodeURIComponent(game.game_id)}`}
+                >
                   <div>
                     <div className="kicker">
                       {formatGameTime(game.start_time)}
@@ -122,8 +126,9 @@ export default async function HomePage() {
                     ) : (
                       <span>Prediction pending</span>
                     )}
+                    <span> →</span>
                   </div>
-                </article>
+                </Link>
               );
             })}
           </div>
