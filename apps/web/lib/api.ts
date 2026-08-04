@@ -29,3 +29,41 @@ export async function getMlbResults(days = 7) {
   if (!response.ok) throw new Error("Unable to load MLB results");
   return response.json();
 }
+
+export async function getSportsCatalog() {
+  const response = await fetch(`${API_URL}/api/sports`, {
+    cache: "no-store",
+  });
+
+  if (!response.ok) {
+    throw new Error("Unable to load sports catalog");
+  }
+
+  return response.json();
+}
+
+export async function getSportCapabilities(sport: string) {
+  const response = await fetch(
+    `${API_URL}/api/sports/${encodeURIComponent(sport)}/capabilities`,
+    { cache: "no-store" },
+  );
+
+  if (!response.ok) {
+    throw new Error(`Unable to load ${sport} capabilities`);
+  }
+
+  return response.json();
+}
+
+export async function getSport(sport: string) {
+  const response = await fetch(
+    `${API_URL}/api/sports/${encodeURIComponent(sport)}`,
+    { cache: "no-store" },
+  );
+
+  if (!response.ok) {
+    throw new Error(`Unable to load ${sport} data`);
+  }
+
+  return response.json();
+}
