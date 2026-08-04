@@ -69,6 +69,17 @@ export default async function NflGamePage({
       ? gameMetadata.home_record
       : null;
   const hasRecord = Boolean(awayRecord || homeRecord);
+  const awayQb =
+    gameMetadata.away_qb &&
+    typeof gameMetadata.away_qb === "object"
+      ? (gameMetadata.away_qb as Record<string, unknown>)
+      : null;
+  const homeQb =
+    gameMetadata.home_qb &&
+    typeof gameMetadata.home_qb === "object"
+      ? (gameMetadata.home_qb as Record<string, unknown>)
+      : null;
+  const hasQb = Boolean(awayQb?.name || homeQb?.name);
 
   return (
     <main>
@@ -141,6 +152,34 @@ export default async function NflGamePage({
               <span>Home team</span>
               <strong>{game.home_team}</strong>
               <small>{homeRecord ? String(homeRecord) : "—"}</small>
+            </div>
+          </section>
+        )}
+
+        {hasQb && (
+          <section className="mlb-detail-grid">
+            <div className="market-card">
+              <span>Away quarterback</span>
+              <strong>
+                {awayQb?.name ? String(awayQb.name) : "Not announced"}
+              </strong>
+              <small>
+                {awayQb?.status ? String(awayQb.status) : "Pending"}
+              </small>
+            </div>
+            <div className="market-card">
+              <span>Quarterback factor</span>
+              <strong>Observation only</strong>
+              <small>QB status does not affect confidence yet.</small>
+            </div>
+            <div className="market-card">
+              <span>Home quarterback</span>
+              <strong>
+                {homeQb?.name ? String(homeQb.name) : "Not announced"}
+              </strong>
+              <small>
+                {homeQb?.status ? String(homeQb.status) : "Pending"}
+              </small>
             </div>
           </section>
         )}

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from datetime import date, timedelta
+import json
 import os
 import time
 from typing import Any
@@ -277,6 +278,91 @@ def _yahoo_team_record(
     return _record_value(record)
 
 
+
+def _qb_overrides() -> dict[str, dict[str, str]]:
+    raw = os.getenv("NFL_QB_OVERRIDES_JSON", "").strip()
+    if not raw:
+        return {}
+
+    try:
+        payload = json.loads(raw)
+    except json.JSONDecodeError:
+        return {}
+
+    if not isinstance(payload, dict):
+        return {}
+
+    result: dict[str, dict[str, str]] = {}
+    for team, value in payload.items():
+        if isinstance(value, str):
+            result[str(team)] = {
+                "name": value,
+                "status": "expected",
+                "source": "manual override",
+            }
+        elif isinstance(value, dict):
+            name = str(value.get("name") or "").strip()
+            if name:
+                result[str(team)] = {
+                    "name": name,
+                    "status": str(value.get("status") or "expected").strip(),
+                    "source": str(value.get("source") or "manual override").strip(),
+                }
+
+    return result
+
+
+def _qb_context(
+    scoreboard: dict[str, Any],
+    game_id: str,
+    team_name: str,
+    side: str,
+) -> dict[str, Any]:
+    override = _qb_overrides().get(team_name)
+    if override:
+        return {
+            "name": override.get("name"),
+            "status": override.get("status") or "expected",
+            "source": override.get("source") or "manual override",
+            "confirmed": False,
+        }
+
+    byline = _collection_item(
+        scoreboard.get("gamebyline", {}),
+        game_id,
+        "nfl.g.",
+    )
+
+    value = (
+        byline.get(f"{side}_qb")
+        or byline.get(f"{side}_quarterback")
+        or byline.get(f"{side}_starter")
+    )
+
+    if isinstance(value, dict):
+        name = (
+            value.get("display_name")
+            or value.get("full_name")
+            or value.get("name")
+        )
+        status = str(value.get("status") or "expected")
+        if name:
+            return {
+                "name": str(name),
+                "status": status,
+                "source": "Yahoo Sports",
+                "confirmed": status.lower()
+                in {"confirmed", "active", "starting"},
+            }
+
+    return {
+        "name": None,
+        "status": "not announced",
+        "source": None,
+        "confirmed": False,
+    }
+
+
 def _yahoo_game(
     game_id: str,
     payload: dict[str, Any],
@@ -309,6 +395,8 @@ def _yahoo_game(
 
     away_record = _yahoo_team_record(scoreboard, away_value)
     home_record = _yahoo_team_record(scoreboard, home_value)
+    away_qb = _qb_context(scoreboard, game_id, away_team, "away")
+    home_qb = _qb_context(scoreboard, game_id, home_team, "home")
 
     status_text = (
         payload.get("status")
@@ -359,6 +447,9 @@ def _yahoo_game(
                 else None
             ),
             "records_affect_prediction": False,
+            "away_qb": away_qb,
+            "home_qb": home_qb,
+            "qb_affects_prediction": False,
         },
     )
 
@@ -476,6 +567,15 @@ def _moneyline_prediction(game: SportGame) -> SportPrediction:
     confidence = round(min(68, max(53, 54 + abs(gap) * 1.35)))
     probability = round(min(0.68, max(0.52, 0.52 + abs(gap) / 45)), 3)
 
+    away_qb = game.metadata.get("away_qb", {})
+    home_qb = game.metadata.get("home_qb", {})
+    qb_announced = bool(
+        isinstance(away_qb, dict)
+        and away_qb.get("name")
+        and isinstance(home_qb, dict)
+        and home_qb.get("name")
+    )
+
     factors = [
         {
             "factor_id": "team_rating",
@@ -510,6 +610,29 @@ def _moneyline_prediction(game: SportGame) -> SportPrediction:
             "version": RATING_VERSION,
             "contributes_to": ["moneyline"],
             "used_in_confidence": True,
+        },
+        {
+            "factor_id": "quarterback_status",
+            "name": "Quarterback Status",
+            "category": "key_player",
+            "score": 0.0,
+            "weight": 0.0,
+            "reliability": 0.35 if qb_announced else 0.0,
+            "explanation": (
+                (
+                    f"{game.away_team}: {away_qb.get('name')} "
+                    f"({away_qb.get('status')}); "
+                    f"{game.home_team}: {home_qb.get('name')} "
+                    f"({home_qb.get('status')})."
+                )
+                if qb_announced
+                else "Starting quarterbacks are not yet confirmed."
+            ),
+            "direction": "neutral",
+            "usage": "observation_only",
+            "version": RATING_VERSION,
+            "contributes_to": [],
+            "used_in_confidence": False,
         },
     ]
 
@@ -570,6 +693,10 @@ def _moneyline_prediction(game: SportGame) -> SportPrediction:
             "home_rating": home_rating,
             "home_field_rating": HOME_FIELD_RATING,
             "rating_gap": round(gap, 3),
+            "away_qb": away_qb,
+            "home_qb": home_qb,
+            "qb_announced": qb_announced,
+            "qb_affects_prediction": False,
         },
     )
 
