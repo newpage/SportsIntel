@@ -606,9 +606,24 @@ def _season_context(game: SportGame) -> dict[str, Any]:
         if value
     )
 
+    game_date = None
+    try:
+        raw_start = str(game.start_time)
+        if raw_start and raw_start != "TBD":
+            game_date = date.fromisoformat(raw_start[:10])
+    except (TypeError, ValueError):
+        game_date = None
+
+    calendar_preseason = bool(
+        game_date
+        and game_date.month == 8
+        and game_date.day <= 31
+    )
+
     is_preseason = (
         "preseason" in joined
         or season_type in {"1", "pre"}
+        or calendar_preseason
     )
 
     if not is_preseason:
@@ -619,7 +634,22 @@ def _season_context(game: SportGame) -> dict[str, Any]:
             "prediction_label": "Moneyline Pick",
             "starter_certainty": "standard",
             "preseason_confidence_cap": None,
+            "season_detection_source": (
+                "schedule metadata"
+                if joined
+                else "calendar fallback"
+            ),
         }
+
+    if week_number is None and game_date is not None:
+        if game_date.day <= 6:
+            week_number = 1
+        elif game_date.day <= 13:
+            week_number = 1
+        elif game_date.day <= 20:
+            week_number = 2
+        else:
+            week_number = 3
 
     if "hall of fame" in joined:
         cap = 55
@@ -644,6 +674,11 @@ def _season_context(game: SportGame) -> dict[str, Any]:
         "prediction_label": label,
         "starter_certainty": "low",
         "preseason_confidence_cap": cap,
+        "season_detection_source": (
+            "schedule metadata"
+            if "preseason" in joined or season_type in {"1", "pre"}
+            else "calendar fallback"
+        ),
     }
 
 
@@ -878,6 +913,9 @@ def _moneyline_prediction(game: SportGame) -> SportPrediction:
             "starter_certainty": season_context["starter_certainty"],
             "preseason_confidence_cap": (
                 season_context["preseason_confidence_cap"]
+            ),
+            "season_detection_source": (
+                season_context["season_detection_source"]
             ),
         },
     )
