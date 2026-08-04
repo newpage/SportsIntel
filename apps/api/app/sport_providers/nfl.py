@@ -9,7 +9,11 @@ from typing import Any
 
 import httpx
 
-from app.intelligence import TeamHealthEngine, build_prediction_waterfall
+from app.intelligence import (
+    TeamHealthEngine,
+    build_prediction_waterfall,
+    build_team_intelligence,
+)
 from app.sport_providers.nfl_ratings import (
     HOME_FIELD_RATING,
     RATING_VERSION,
@@ -995,6 +999,65 @@ def _moneyline_prediction(game: SportGame) -> SportPrediction:
         market_pick_probability,
     )
 
+    away_team_intelligence = build_team_intelligence(
+        team=game.away_team,
+        side="away",
+        rating=away_rating,
+        opponent_rating=home_rating,
+        home_field_rating=HOME_FIELD_RATING,
+        health=away_team_health.to_dict(),
+        quarterback=away_qb if isinstance(away_qb, dict) else {},
+        market_probability=(
+            market.get("away_no_vig_probability")
+            if market_available
+            else None
+        ),
+        model_probability=(
+            1.0 - model_pick_probability
+            if pick == game.home_team
+            else model_pick_probability
+        ),
+        market_edge=(
+            -market_edge
+            if market_edge is not None and pick == game.home_team
+            else market_edge
+        ),
+        readiness_score=data_readiness_score,
+        readiness_label=readiness_label,
+        season_phase=season_context["season_phase"],
+        confidence=confidence,
+    )
+    home_team_intelligence = build_team_intelligence(
+        team=game.home_team,
+        side="home",
+        rating=home_rating,
+        opponent_rating=away_rating,
+        home_field_rating=HOME_FIELD_RATING,
+        health=home_team_health.to_dict(),
+        quarterback=home_qb if isinstance(home_qb, dict) else {},
+        market_probability=(
+            market.get("home_no_vig_probability")
+            if market_available
+            else None
+        ),
+        model_probability=(
+            model_pick_probability
+            if pick == game.home_team
+            else 1.0 - model_pick_probability
+        ),
+        market_edge=(
+            market_edge
+            if market_edge is not None and pick == game.home_team
+            else -market_edge
+            if market_edge is not None
+            else None
+        ),
+        readiness_score=data_readiness_score,
+        readiness_label=readiness_label,
+        season_phase=season_context["season_phase"],
+        confidence=confidence,
+    )
+
     prediction_waterfall = build_prediction_waterfall(
         raw_confidence=raw_confidence,
         final_confidence=confidence,
@@ -1213,6 +1276,11 @@ def _moneyline_prediction(game: SportGame) -> SportPrediction:
             "team_health": {
                 "away": away_team_health.to_dict(),
                 "home": home_team_health.to_dict(),
+                "affects_prediction": False,
+            },
+            "team_intelligence": {
+                "away": away_team_intelligence.to_dict(),
+                "home": home_team_intelligence.to_dict(),
                 "affects_prediction": False,
             },
             "records_available": records_available,
