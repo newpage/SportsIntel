@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from datetime import date
+from datetime import date, timedelta
 import os
 import time
 from typing import Any
@@ -21,15 +21,19 @@ from app.sports import (
 )
 
 
+YAHOO_SCOREBOARD_URL = os.getenv(
+    "NFL_YAHOO_SCOREBOARD_URL",
+    "https://api-secure.sports.yahoo.com/v1/editorial/s/scoreboard",
+)
 NFL_SCOREBOARD_URL = os.getenv(
     "NFL_SCOREBOARD_URL",
     "https://site.api.espn.com/apis/site/v2/sports/football/nfl/scoreboard",
 )
 CACHE_SECONDS = 300
+SCHEDULE_LOOKAHEAD_DAYS = 14
 _CACHE: tuple[float, list[SportGame]] | None = None
 _LAST_ERROR: str | None = None
-
-
+_LAST_SOURCE: str | None = None
 def _status(value: str | None) -> GameStatus:
     normalized = (value or "").strip().lower()
 
@@ -130,45 +134,213 @@ def _game_from_event(event: dict[str, Any]) -> SportGame | None:
     )
 
 
-def _fetch_schedule(
-    target_date: date | None = None,
-) -> list[SportGame]:
-    global _CACHE, _LAST_ERROR
+def _reference_id(value: Any, prefix: str) -> str | None:
+    if isinstance(value, str):
+        return value if value.startswith(prefix) else None
+    if isinstance(value, list):
+        for item in value:
+            found = _reference_id(item, prefix)
+            if found:
+                return found
+    if isinstance(value, dict):
+        for item in value.values():
+            found = _reference_id(item, prefix)
+            if found:
+                return found
+    return None
+
+
+def _yahoo_team_name(teams: dict[str, Any], value: Any) -> str | None:
+    team_id = _reference_id(value, "nfl.t.")
+    team = teams.get(team_id, {}) if team_id else {}
+    if isinstance(value, dict):
+        team = {**value, **team}
+
+    for key in ("display_name", "full_name", "name", "short_name", "nickname"):
+        candidate = team.get(key)
+        if candidate:
+            return str(candidate)
+
+    city = team.get("city") or team.get("location")
+    nickname = team.get("nickname")
+    if city and nickname:
+        return f"{city} {nickname}"
+    return None
+
+
+def _yahoo_game(
+    game_id: str,
+    payload: dict[str, Any],
+    scoreboard: dict[str, Any],
+) -> SportGame | None:
+    teams = scoreboard.get("teams", {})
+    byline = scoreboard.get("gamebyline", {}).get(game_id, {})
+
+    away_value = (
+        payload.get("away_team")
+        or payload.get("away_team_id")
+        or byline.get("away_team")
+        or byline.get("away_team_id")
+    )
+    home_value = (
+        payload.get("home_team")
+        or payload.get("home_team_id")
+        or byline.get("home_team")
+        or byline.get("home_team_id")
+    )
+
+    away_team = _yahoo_team_name(teams, away_value)
+    home_team = _yahoo_team_name(teams, home_value)
+    if not away_team or not home_team:
+        return None
+
+    status_text = (
+        payload.get("status")
+        or payload.get("status_type")
+        or payload.get("game_status")
+        or ""
+    )
+    status = _status(str(status_text))
+    if payload.get("is_final") or payload.get("completed"):
+        status = GameStatus.FINAL
+
+    return SportGame(
+        sport="nfl",
+        game_id=f"nfl-yahoo-{game_id}",
+        away_team=away_team,
+        home_team=home_team,
+        start_time=str(
+            payload.get("start_time")
+            or payload.get("start_time_iso")
+            or payload.get("date")
+            or "TBD"
+        ),
+        status=status,
+        away_score=_score(
+            payload.get("away_score")
+            or byline.get("away_score")
+        ),
+        home_score=_score(
+            payload.get("home_score")
+            or byline.get("home_score")
+        ),
+        venue=(
+            payload.get("venue")
+            or payload.get("venue_name")
+            or byline.get("venue")
+        ),
+        metadata={
+            "data_mode": "live_schedule",
+            "schedule_confirmed": True,
+            "source": "Yahoo Sports",
+            "source_game_id": game_id,
+            "status_detail": status_text,
+        },
+    )
+
+
+def _fetch_yahoo_schedule(target_date: date | None = None) -> list[SportGame]:
+    start_date = target_date or date.today()
+    days = 1 if target_date is not None else SCHEDULE_LOOKAHEAD_DAYS + 1
+    games_by_id: dict[str, SportGame] = {}
+
+    with httpx.Client(
+        headers={
+            "User-Agent": "Mozilla/5.0",
+            "Accept": "application/json,text/plain,*/*",
+            "Referer": "https://sports.yahoo.com/",
+        },
+        timeout=15,
+        follow_redirects=True,
+    ) as client:
+        for offset in range(days):
+            query_date = start_date + timedelta(days=offset)
+            response = client.get(
+                YAHOO_SCOREBOARD_URL,
+                params={
+                    "leagues": "nfl",
+                    "date": query_date.isoformat(),
+                    "lang": "en-US",
+                    "region": "US",
+                },
+            )
+            response.raise_for_status()
+            scoreboard = (
+                response.json()
+                .get("service", {})
+                .get("scoreboard", {})
+            )
+            raw_games = scoreboard.get("games", {})
+            if not isinstance(raw_games, dict):
+                continue
+
+            for game_id, payload in raw_games.items():
+                if not isinstance(payload, dict):
+                    continue
+                game = _yahoo_game(str(game_id), payload, scoreboard)
+                if game:
+                    games_by_id[game.game_id] = game
+
+    games = list(games_by_id.values())
+    games.sort(key=lambda item: str(item.start_time))
+    return games
+
+
+def _fetch_espn_schedule(target_date: date | None = None) -> list[SportGame]:
+    params: dict[str, str | int] = {"limit": 100}
+    if target_date is not None:
+        params["dates"] = target_date.strftime("%Y%m%d")
+
+    response = httpx.get(
+        NFL_SCOREBOARD_URL,
+        params=params,
+        headers={
+            "User-Agent": "Mozilla/5.0",
+            "Accept": "application/json,text/plain,*/*",
+        },
+        timeout=15,
+        follow_redirects=True,
+    )
+    response.raise_for_status()
+    payload = response.json()
+
+    games = [
+        game
+        for event in payload.get("events", [])
+        if (game := _game_from_event(event)) is not None
+    ]
+    games.sort(key=lambda item: str(item.start_time))
+    return games
+
+
+def _fetch_schedule(target_date: date | None = None) -> list[SportGame]:
+    global _CACHE, _LAST_ERROR, _LAST_SOURCE
 
     now = time.monotonic()
     if target_date is None and _CACHE and _CACHE[0] > now:
         return _CACHE[1]
 
-    params: dict[str, str | int] = {"limit": 100}
-    if target_date is not None:
-        params["dates"] = target_date.strftime("%Y%m%d")
+    errors: list[str] = []
 
-    try:
-        response = httpx.get(
-            NFL_SCOREBOARD_URL,
-            params=params,
-            headers={"User-Agent": "SportsIntel/1.0"},
-            timeout=15,
-        )
-        response.raise_for_status()
-        payload = response.json()
+    for source_name, loader in (
+        ("Yahoo Sports", _fetch_yahoo_schedule),
+        ("ESPN scoreboard", _fetch_espn_schedule),
+    ):
+        try:
+            games = loader(target_date)
+            if games:
+                _LAST_ERROR = None
+                _LAST_SOURCE = source_name
+                if target_date is None:
+                    _CACHE = (now + CACHE_SECONDS, games)
+                return games
+            errors.append(f"{source_name}: no games returned")
+        except Exception as exc:
+            errors.append(f"{source_name}: {type(exc).__name__}: {exc}")
 
-        games = [
-            game
-            for event in payload.get("events", [])
-            if (game := _game_from_event(event)) is not None
-        ]
-        games.sort(key=lambda item: str(item.start_time))
-
-        _LAST_ERROR = None
-        if target_date is None:
-            _CACHE = (now + CACHE_SECONDS, games)
-
-        return games
-    except Exception as exc:
-        _LAST_ERROR = f"{type(exc).__name__}: {exc}"
-        return []
-
+    _LAST_SOURCE = None
+    _LAST_ERROR = " | ".join(errors)
+    return []
 
 
 def _moneyline_prediction(game: SportGame) -> SportPrediction:
@@ -315,6 +487,7 @@ class NFLProvider(SportProvider):
                 "prediction_scope": "moneyline_only",
                 "rating_version": RATING_VERSION,
                 "cache_seconds": CACHE_SECONDS,
+                "schedule_source": _LAST_SOURCE,
                 "last_error": _LAST_ERROR,
             }
         )
