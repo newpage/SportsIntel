@@ -1,11 +1,11 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { getSport } from "../../lib/api";
+import { getSport } from "../../../lib/api";
 import type {
   MarketPrediction,
   SportGameEnvelope,
   SportHomeResponse,
-} from "../../lib/sports";
+} from "../../../lib/sports";
 
 function formatGameTime(value: string) {
   if (!value || value === "TBD") return "Time TBD";
