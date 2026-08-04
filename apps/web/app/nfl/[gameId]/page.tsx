@@ -60,8 +60,15 @@ export default async function NflGamePage({
     : [];
   const metadata = prediction.metadata || {};
   const gameMetadata = game.metadata || {};
-  const awayRecord = gameMetadata.away_record;
-  const homeRecord = gameMetadata.home_record;
+  const awayRecord =
+    typeof gameMetadata.away_record === "string"
+      ? gameMetadata.away_record
+      : null;
+  const homeRecord =
+    typeof gameMetadata.home_record === "string"
+      ? gameMetadata.home_record
+      : null;
+  const hasRecord = Boolean(awayRecord || homeRecord);
 
   return (
     <main>
@@ -84,7 +91,7 @@ export default async function NflGamePage({
             <div className="subtle">
               {game.venue || "Venue not yet available"}
             </div>
-            {(awayRecord || homeRecord) && (
+            {hasRecord && (
               <div className="subtle">
                 {awayRecord && (
                   <>
@@ -118,7 +125,7 @@ export default async function NflGamePage({
           </div>
         </section>
 
-        {(awayRecord || homeRecord) && (
+        {hasRecord && (
           <section className="mlb-detail-grid">
             <div className="market-card">
               <span>Away team</span>
