@@ -210,6 +210,73 @@ def _yahoo_team_name(teams: Any, value: Any) -> str | None:
     return None
 
 
+
+def _record_value(record: Any) -> str | None:
+    if isinstance(record, str):
+        value = record.strip()
+        return value or None
+
+    if not isinstance(record, dict):
+        return None
+
+    for key in (
+        "record",
+        "display_record",
+        "overall_record",
+        "summary",
+        "value",
+    ):
+        value = record.get(key)
+        if isinstance(value, str) and value.strip():
+            return value.strip()
+
+    wins = losses = ties = None
+    stats = record.get("stats")
+    if isinstance(stats, list):
+        for stat in stats:
+            if not isinstance(stat, dict):
+                continue
+
+            label = str(
+                stat.get("abbr")
+                or stat.get("name")
+                or stat.get("stat_type")
+                or ""
+            ).strip().lower()
+            value = stat.get("value")
+
+            if label in {"w", "wins", "win"}:
+                wins = value
+            elif label in {"l", "losses", "loss"}:
+                losses = value
+            elif label in {"t", "ties", "tie"}:
+                ties = value
+
+    if wins is not None and losses is not None:
+        result = f"{wins}-{losses}"
+        if ties not in (None, "", 0, "0"):
+            result += f"-{ties}"
+        return result
+
+    return None
+
+
+def _yahoo_team_record(
+    scoreboard: dict[str, Any],
+    team_value: Any,
+) -> str | None:
+    team_id = _reference_id(team_value, "nfl.t.")
+    if not team_id:
+        return None
+
+    record = _collection_item(
+        scoreboard.get("teamrecord", {}),
+        team_id,
+        "nfl.t.",
+    )
+    return _record_value(record)
+
+
 def _yahoo_game(
     game_id: str,
     payload: dict[str, Any],
@@ -239,6 +306,9 @@ def _yahoo_game(
     home_team = _yahoo_team_name(teams, home_value)
     if not away_team or not home_team:
         return None
+
+    away_record = _yahoo_team_record(scoreboard, away_value)
+    home_record = _yahoo_team_record(scoreboard, home_value)
 
     status_text = (
         payload.get("status")
@@ -281,6 +351,14 @@ def _yahoo_game(
             "source": "Yahoo Sports",
             "source_game_id": game_id,
             "status_detail": status_text,
+            "away_record": away_record,
+            "home_record": home_record,
+            "record_source": (
+                "Yahoo Sports"
+                if away_record or home_record
+                else None
+            ),
+            "records_affect_prediction": False,
         },
     )
 

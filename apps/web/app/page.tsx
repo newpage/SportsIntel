@@ -104,8 +104,15 @@ export default async function HomePage() {
                       {formatGameTime(game.start_time)}
                     </div>
                     <span>
-                      <strong>{game.away_team}</strong> at{" "}
+                      <strong>{game.away_team}</strong>
+                      {game.metadata?.away_record
+                        ? ` (${String(game.metadata.away_record)})`
+                        : ""}
+                      {" at "}
                       <strong>{game.home_team}</strong>
+                      {game.metadata?.home_record
+                        ? ` (${String(game.metadata.home_record)})`
+                        : ""}
                     </span>
                     <div className="subtle">
                       {game.venue || "Venue not yet available"}

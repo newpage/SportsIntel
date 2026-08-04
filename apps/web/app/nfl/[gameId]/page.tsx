@@ -59,6 +59,9 @@ export default async function NflGamePage({
     ? explanation.reasons
     : [];
   const metadata = prediction.metadata || {};
+  const gameMetadata = game.metadata || {};
+  const awayRecord = gameMetadata.away_record;
+  const homeRecord = gameMetadata.home_record;
 
   return (
     <main>
@@ -81,6 +84,11 @@ export default async function NflGamePage({
             <div className="subtle">
               {game.venue || "Venue not yet available"}
             </div>
+            <div className="subtle">
+              {game.away_team}: {awayRecord ? String(awayRecord) : "Record unavailable"}
+              {" · "}
+              {game.home_team}: {homeRecord ? String(homeRecord) : "Record unavailable"}
+            </div>
             <div className="game-pick-label">SportsIntel moneyline lean</div>
             <div className="game-pick">
               {prediction.pick || "Prediction pending"}
@@ -97,6 +105,24 @@ export default async function NflGamePage({
                 }}
               />
             </div>
+          </div>
+        </section>
+
+        <section className="mlb-detail-grid">
+          <div className="market-card">
+            <span>Away team</span>
+            <strong>{game.away_team}</strong>
+            <small>{awayRecord ? String(awayRecord) : "Record unavailable"}</small>
+          </div>
+          <div className="market-card">
+            <span>Matchup context</span>
+            <strong>Records are display-only</strong>
+            <small>They do not affect baseline confidence yet.</small>
+          </div>
+          <div className="market-card">
+            <span>Home team</span>
+            <strong>{game.home_team}</strong>
+            <small>{homeRecord ? String(homeRecord) : "Record unavailable"}</small>
           </div>
         </section>
 
