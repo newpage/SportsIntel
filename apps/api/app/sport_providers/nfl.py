@@ -562,6 +562,91 @@ def _fetch_schedule(target_date: date | None = None) -> list[SportGame]:
     return []
 
 
+def _season_context(game: SportGame) -> dict[str, Any]:
+    metadata = game.metadata or {}
+    season = metadata.get("season")
+    week = metadata.get("week")
+    status_detail = str(metadata.get("status_detail") or "").lower()
+
+    season_type = ""
+    season_label = ""
+    week_number: int | None = None
+
+    if isinstance(season, dict):
+        season_type = str(
+            season.get("type")
+            or season.get("slug")
+            or season.get("name")
+            or ""
+        ).lower()
+        season_label = str(
+            season.get("displayName")
+            or season.get("name")
+            or ""
+        )
+
+    if isinstance(week, dict):
+        raw_week = (
+            week.get("number")
+            or week.get("week")
+            or week.get("value")
+        )
+        try:
+            week_number = int(raw_week)
+        except (TypeError, ValueError):
+            week_number = None
+
+    joined = " ".join(
+        value
+        for value in (
+            season_type,
+            season_label.lower(),
+            status_detail,
+        )
+        if value
+    )
+
+    is_preseason = (
+        "preseason" in joined
+        or season_type in {"1", "pre"}
+    )
+
+    if not is_preseason:
+        return {
+            "season_phase": "regular",
+            "preseason_week": None,
+            "prediction_type": "regular_pick",
+            "prediction_label": "Moneyline Pick",
+            "starter_certainty": "standard",
+            "preseason_confidence_cap": None,
+        }
+
+    if "hall of fame" in joined:
+        cap = 55
+        label = "Hall of Fame Game Lean"
+    elif week_number == 1:
+        cap = 57
+        label = "Preseason Week 1 Lean"
+    elif week_number == 2:
+        cap = 58
+        label = "Preseason Week 2 Lean"
+    elif week_number == 3:
+        cap = 60
+        label = "Preseason Week 3 Lean"
+    else:
+        cap = 57
+        label = "Preseason Lean"
+
+    return {
+        "season_phase": "preseason",
+        "preseason_week": week_number,
+        "prediction_type": "preseason_lean",
+        "prediction_label": label,
+        "starter_certainty": "low",
+        "preseason_confidence_cap": cap,
+    }
+
+
 def _moneyline_prediction(game: SportGame) -> SportPrediction:
     away_team_normalized = normalize_team_name(game.away_team)
     home_team_normalized = normalize_team_name(game.home_team)
@@ -615,6 +700,11 @@ def _moneyline_prediction(game: SportGame) -> SportPrediction:
     else:
         confidence_cap = 60
         readiness_label = "limited"
+
+    season_context = _season_context(game)
+    preseason_cap = season_context.get("preseason_confidence_cap")
+    if isinstance(preseason_cap, int):
+        confidence_cap = min(confidence_cap, preseason_cap)
 
     confidence = min(raw_confidence, confidence_cap)
 
@@ -676,6 +766,25 @@ def _moneyline_prediction(game: SportGame) -> SportPrediction:
             "contributes_to": [],
             "used_in_confidence": False,
         },
+        {
+            "factor_id": "preseason_context",
+            "name": "Preseason Context",
+            "category": "season_phase",
+            "score": 0.0,
+            "weight": 0.0,
+            "reliability": 1.0,
+            "explanation": (
+                "Confidence is reduced because preseason playing time "
+                "and player participation are highly variable."
+                if season_context["season_phase"] == "preseason"
+                else "Regular-season context is active."
+            ),
+            "direction": "neutral",
+            "usage": "observation_only",
+            "version": RATING_VERSION,
+            "contributes_to": [],
+            "used_in_confidence": False,
+        },
     ]
 
     markets = [
@@ -706,15 +815,21 @@ def _moneyline_prediction(game: SportGame) -> SportPrediction:
         game_id=game.game_id,
         pick=pick,
         confidence=confidence,
-        recommendation="Early moneyline lean",
+        recommendation=season_context["prediction_label"],
         factors=factors,
         timeline=[],
         markets=markets,
         explanation={
             "title": "Why SportsIntel Likes This Pick",
             "summary": (
-                f"SportsIntel gives {pick} an early edge based on "
-                "provisional team strength and home field only."
+                (
+                    f"SportsIntel gives {pick} a preseason lean based on "
+                    "provisional team strength and home field only."
+                    if season_context["season_phase"] == "preseason"
+                    else
+                    f"SportsIntel gives {pick} an early edge based on "
+                    "provisional team strength and home field only."
+                )
             ),
             "reasons": [
                 f"Adjusted rating gap is {abs(gap):.1f} points in favor of {pick}.",
@@ -755,6 +870,14 @@ def _moneyline_prediction(game: SportGame) -> SportPrediction:
             "confidence_cap": confidence_cap,
             "confidence_guardrail_applied": (
                 confidence < raw_confidence
+            ),
+            "season_phase": season_context["season_phase"],
+            "preseason_week": season_context["preseason_week"],
+            "prediction_type": season_context["prediction_type"],
+            "prediction_label": season_context["prediction_label"],
+            "starter_certainty": season_context["starter_certainty"],
+            "preseason_confidence_cap": (
+                season_context["preseason_confidence_cap"]
             ),
         },
     )

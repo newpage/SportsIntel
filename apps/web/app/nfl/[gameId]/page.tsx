@@ -104,6 +104,19 @@ export default async function NflGamePage({
       : game.home_team;
   const teamNameNormalized =
     metadata.team_name_normalized === true;
+  const seasonPhase =
+    typeof metadata.season_phase === "string"
+      ? metadata.season_phase
+      : "regular";
+  const predictionLabel =
+    typeof metadata.prediction_label === "string"
+      ? metadata.prediction_label
+      : "Moneyline Pick";
+  const preseasonWeek =
+    typeof metadata.preseason_week === "number"
+      ? metadata.preseason_week
+      : null;
+  const isPreseason = seasonPhase === "preseason";
 
   return (
     <main>
@@ -141,7 +154,9 @@ export default async function NflGamePage({
                 )}
               </div>
             )}
-            <div className="game-pick-label">SportsIntel moneyline lean</div>
+            <div className="game-pick-label">
+              SportsIntel {predictionLabel}
+            </div>
             <div className="game-pick">
               {prediction.pick || "Prediction pending"}
             </div>
@@ -225,6 +240,26 @@ export default async function NflGamePage({
             <small>Planned for a later NFL sprint</small>
           </div>
         </section>
+
+        {isPreseason && (
+          <section className="card breaking-impact">
+            <div>
+              <div className="kicker">Season context</div>
+              <div className="breaking-headline">
+                {preseasonWeek
+                  ? `Preseason Week ${preseasonWeek}`
+                  : "Preseason"}
+              </div>
+              <div className="subtle">
+                Confidence is reduced because playing time and
+                participation are highly variable.
+              </div>
+            </div>
+            <span className="impact-badge positive">
+              Preseason lean
+            </span>
+          </section>
+        )}
 
         <section className="mlb-detail-grid">
           <div className="market-card">
