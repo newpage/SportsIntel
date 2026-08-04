@@ -80,6 +80,20 @@ export default async function NflGamePage({
       ? (gameMetadata.home_qb as Record<string, unknown>)
       : null;
   const hasQb = Boolean(awayQb?.name || homeQb?.name);
+  const readinessScore =
+    typeof metadata.data_readiness_score === "number"
+      ? metadata.data_readiness_score
+      : 60;
+  const readinessLabel =
+    typeof metadata.data_readiness_label === "string"
+      ? metadata.data_readiness_label
+      : "limited";
+  const confidenceCap =
+    typeof metadata.confidence_cap === "number"
+      ? metadata.confidence_cap
+      : 60;
+  const guardrailApplied =
+    metadata.confidence_guardrail_applied === true;
 
   return (
     <main>
@@ -199,6 +213,30 @@ export default async function NflGamePage({
             <span>Total</span>
             <strong>{total?.selection || "Not available"}</strong>
             <small>Planned for a later NFL sprint</small>
+          </div>
+        </section>
+
+        <section className="mlb-detail-grid">
+          <div className="market-card">
+            <span>Data readiness</span>
+            <strong>{readinessScore}%</strong>
+            <small>{readinessLabel} input coverage</small>
+          </div>
+          <div className="market-card">
+            <span>Confidence guardrail</span>
+            <strong>{confidenceCap}% maximum</strong>
+            <small>
+              {guardrailApplied
+                ? "The guardrail reduced displayed confidence."
+                : "The model is already below the current cap."}
+            </small>
+          </div>
+          <div className="market-card">
+            <span>Pick behavior</span>
+            <strong>Team selection unchanged</strong>
+            <small>
+              Readiness changes confidence, not the selected team.
+            </small>
           </div>
         </section>
 

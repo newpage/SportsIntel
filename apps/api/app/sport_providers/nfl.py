@@ -564,8 +564,13 @@ def _moneyline_prediction(game: SportGame) -> SportPrediction:
     gap = adjusted_home - away_rating
 
     pick = game.home_team if gap >= 0 else game.away_team
-    confidence = round(min(68, max(53, 54 + abs(gap) * 1.35)))
-    probability = round(min(0.68, max(0.52, 0.52 + abs(gap) / 45)), 3)
+    raw_confidence = round(
+        min(68, max(53, 54 + abs(gap) * 1.35))
+    )
+    probability = round(
+        min(0.68, max(0.52, 0.52 + abs(gap) / 45)),
+        3,
+    )
 
     away_qb = game.metadata.get("away_qb", {})
     home_qb = game.metadata.get("home_qb", {})
@@ -575,6 +580,35 @@ def _moneyline_prediction(game: SportGame) -> SportPrediction:
         and isinstance(home_qb, dict)
         and home_qb.get("name")
     )
+    qb_confirmed = bool(
+        qb_announced
+        and away_qb.get("confirmed")
+        and home_qb.get("confirmed")
+    )
+    records_available = bool(
+        game.metadata.get("away_record")
+        and game.metadata.get("home_record")
+    )
+
+    data_readiness_score = 60
+    if qb_announced:
+        data_readiness_score += 20
+    if qb_confirmed:
+        data_readiness_score += 10
+    if records_available:
+        data_readiness_score += 10
+
+    if qb_confirmed:
+        confidence_cap = 68
+        readiness_label = "strong"
+    elif qb_announced:
+        confidence_cap = 64
+        readiness_label = "developing"
+    else:
+        confidence_cap = 60
+        readiness_label = "limited"
+
+    confidence = min(raw_confidence, confidence_cap)
 
     factors = [
         {
@@ -677,8 +711,8 @@ def _moneyline_prediction(game: SportGame) -> SportPrediction:
             "reasons": [
                 f"Adjusted rating gap is {abs(gap):.1f} points in favor of {pick}.",
                 (
-                    "Confidence is intentionally capped because injuries, "
-                    "quarterback status, recent form, and market data are not included yet."
+                    f"Confidence is capped at {confidence_cap}% because "
+                    f"the current data-readiness level is {readiness_label}."
                 ),
             ],
         },
@@ -696,7 +730,16 @@ def _moneyline_prediction(game: SportGame) -> SportPrediction:
             "away_qb": away_qb,
             "home_qb": home_qb,
             "qb_announced": qb_announced,
+            "qb_confirmed": qb_confirmed,
             "qb_affects_prediction": False,
+            "records_available": records_available,
+            "data_readiness_score": data_readiness_score,
+            "data_readiness_label": readiness_label,
+            "raw_confidence": raw_confidence,
+            "confidence_cap": confidence_cap,
+            "confidence_guardrail_applied": (
+                confidence < raw_confidence
+            ),
         },
     )
 
