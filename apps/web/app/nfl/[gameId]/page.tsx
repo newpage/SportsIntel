@@ -84,11 +84,21 @@ export default async function NflGamePage({
             <div className="subtle">
               {game.venue || "Venue not yet available"}
             </div>
-            <div className="subtle">
-              {game.away_team}: {awayRecord ? String(awayRecord) : "Record unavailable"}
-              {" · "}
-              {game.home_team}: {homeRecord ? String(homeRecord) : "Record unavailable"}
-            </div>
+            {(awayRecord || homeRecord) && (
+              <div className="subtle">
+                {awayRecord && (
+                  <>
+                    {game.away_team}: {String(awayRecord)}
+                  </>
+                )}
+                {awayRecord && homeRecord && " · "}
+                {homeRecord && (
+                  <>
+                    {game.home_team}: {String(homeRecord)}
+                  </>
+                )}
+              </div>
+            )}
             <div className="game-pick-label">SportsIntel moneyline lean</div>
             <div className="game-pick">
               {prediction.pick || "Prediction pending"}
@@ -108,23 +118,25 @@ export default async function NflGamePage({
           </div>
         </section>
 
-        <section className="mlb-detail-grid">
-          <div className="market-card">
-            <span>Away team</span>
-            <strong>{game.away_team}</strong>
-            <small>{awayRecord ? String(awayRecord) : "Record unavailable"}</small>
-          </div>
-          <div className="market-card">
-            <span>Matchup context</span>
-            <strong>Records are display-only</strong>
-            <small>They do not affect baseline confidence yet.</small>
-          </div>
-          <div className="market-card">
-            <span>Home team</span>
-            <strong>{game.home_team}</strong>
-            <small>{homeRecord ? String(homeRecord) : "Record unavailable"}</small>
-          </div>
-        </section>
+        {(awayRecord || homeRecord) && (
+          <section className="mlb-detail-grid">
+            <div className="market-card">
+              <span>Away team</span>
+              <strong>{game.away_team}</strong>
+              <small>{awayRecord ? String(awayRecord) : "—"}</small>
+            </div>
+            <div className="market-card">
+              <span>Matchup context</span>
+              <strong>Records are display-only</strong>
+              <small>They do not affect baseline confidence yet.</small>
+            </div>
+            <div className="market-card">
+              <span>Home team</span>
+              <strong>{game.home_team}</strong>
+              <small>{homeRecord ? String(homeRecord) : "—"}</small>
+            </div>
+          </section>
+        )}
 
         <section className="market-grid">
           <div className="market-card">
