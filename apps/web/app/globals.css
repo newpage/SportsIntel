@@ -474,3 +474,33 @@ button:focus-visible,a:focus-visible { outline:none; box-shadow:var(--focus-ring
   line-height:1.45;
 }
 
+/* Why Confidence Changed */
+.timeline-factor-changes {
+  display:flex;
+  flex-wrap:wrap;
+  gap:8px;
+  margin-top:10px;
+}
+.timeline-factor-change {
+  display:flex;
+  align-items:center;
+  gap:6px;
+  padding:7px 9px;
+  border:1px solid var(--line);
+  border-radius:10px;
+  background:var(--surface-soft);
+  font-size:11px;
+}
+.timeline-factor-change strong {
+  font-size:11px;
+}
+.timeline-factor-change span {
+  color:var(--muted);
+}
+.timeline-factor-change.factor-up {
+  border-color:rgba(22,163,74,.28);
+}
+.timeline-factor-change.factor-down {
+  border-color:rgba(220,38,38,.24);
+}
+

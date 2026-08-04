@@ -2,6 +2,84 @@ import Link from "next/link";
 import { getMlbGame, getMlb } from "../../../lib/api";
 import { ConfidenceDetails } from "../../../components/ConfidenceDetails";
 
+
+function factorChanges(current: any, previous: any) {
+  const currentSnapshot = current?.factor_snapshot || {};
+  const previousSnapshot = previous?.factor_snapshot || {};
+  const changes: Array<{
+    id: string;
+    name: string;
+    message: string;
+    direction: "up" | "down" | "neutral";
+  }> = [];
+
+  Object.entries(currentSnapshot).forEach(([factorId, currentValue]: [string, any]) => {
+    const previousValue = previousSnapshot[factorId];
+
+    if (!previousValue) {
+      changes.push({
+        id: `${factorId}-available`,
+        name: currentValue.name || factorId,
+        message: "Factor became available",
+        direction: "neutral",
+      });
+      return;
+    }
+
+    if (currentValue.direction !== previousValue.direction) {
+      changes.push({
+        id: `${factorId}-direction`,
+        name: currentValue.name || factorId,
+        message: `Direction: ${previousValue.direction || "neutral"} → ${currentValue.direction || "neutral"}`,
+        direction: "neutral",
+      });
+    }
+
+    if (currentValue.score !== previousValue.score) {
+      const delta = Number(currentValue.score || 0) - Number(previousValue.score || 0);
+      changes.push({
+        id: `${factorId}-score`,
+        name: currentValue.name || factorId,
+        message: `Score ${delta > 0 ? "+" : ""}${delta.toFixed(3)}`,
+        direction: delta > 0 ? "up" : delta < 0 ? "down" : "neutral",
+      });
+    }
+
+    if (currentValue.reliability !== previousValue.reliability) {
+      const reliability = Math.round(Number(currentValue.reliability || 0) * 100);
+      changes.push({
+        id: `${factorId}-reliability`,
+        name: currentValue.name || factorId,
+        message: `Reliability now ${reliability}%`,
+        direction: "neutral",
+      });
+    }
+
+    if (currentValue.used_in_confidence !== previousValue.used_in_confidence) {
+      changes.push({
+        id: `${factorId}-scoring`,
+        name: currentValue.name || factorId,
+        message: currentValue.used_in_confidence ? "Now used in confidence" : "No longer scored",
+        direction: currentValue.used_in_confidence ? "up" : "down",
+      });
+    }
+  });
+
+  Object.entries(previousSnapshot).forEach(([factorId, previousValue]: [string, any]) => {
+    if (!currentSnapshot[factorId]) {
+      changes.push({
+        id: `${factorId}-removed`,
+        name: previousValue.name || factorId,
+        message: "Factor no longer available",
+        direction: "down",
+      });
+    }
+  });
+
+  return changes.slice(0, 6);
+}
+
+
 function PitcherStat({ label, value }: { label: string; value?: string | null }) {
   return (
     <div className="pitcher-stat">
@@ -159,6 +237,7 @@ export default async function MlbGamePage({ params }: { params: Promise<{ gameId
               {game.prediction_timeline.map((event: any, index: number) => {
                 const nextEvent = game.prediction_timeline[index + 1];
                 const change = nextEvent ? event.confidence - nextEvent.confidence : 0;
+                const changes = nextEvent ? factorChanges(event, nextEvent) : [];
                 return (
                   <article className="prediction-timeline-event" key={`${event.timestamp}-${index}`}>
                     <div className="prediction-timeline-marker" />
@@ -173,6 +252,16 @@ export default async function MlbGamePage({ params }: { params: Promise<{ gameId
                         )}
                       </div>
                       <p>{event.reason}</p>
+                      {changes.length > 0 && (
+                        <div className="timeline-factor-changes">
+                          {changes.map((item) => (
+                            <div className={`timeline-factor-change factor-${item.direction}`} key={item.id}>
+                              <strong>{item.name}</strong>
+                              <span>{item.message}</span>
+                            </div>
+                          ))}
+                        </div>
+                      )}
                     </div>
                   </article>
                 );
