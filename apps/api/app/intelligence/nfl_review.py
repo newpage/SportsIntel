@@ -5,7 +5,7 @@ from statistics import mean
 from typing import Any
 
 
-NFL_REVIEW_VERSION = "nfl-review-v1"
+NFL_REVIEW_VERSION = "nfl-review-v2"
 
 
 def _metadata(item: dict[str, Any]) -> dict[str, Any]:
@@ -22,6 +22,76 @@ def _confidence(item: dict[str, Any]) -> float | None:
         return None
     value = prediction.get("confidence")
     return float(value) if isinstance(value, (int, float)) else None
+
+
+
+def _game(item: dict[str, Any]) -> dict[str, Any]:
+    value = item.get("game")
+    return value if isinstance(value, dict) else {}
+
+
+def _attention_item(item: dict[str, Any]) -> dict[str, Any]:
+    game = _game(item)
+    meta = _metadata(item)
+    prediction = item.get("prediction")
+    prediction = prediction if isinstance(prediction, dict) else {}
+
+    reasons: list[str] = []
+    priority = 0
+
+    if meta.get("qb_announced") is not True:
+        reasons.append("Starting quarterbacks are not fully announced")
+        priority += 3
+
+    readiness = str(meta.get("data_readiness_label") or "unknown").lower()
+    if readiness in {"limited", "unknown"}:
+        reasons.append(f"Data readiness is {readiness}")
+        priority += 3
+    elif readiness == "developing":
+        reasons.append("Data readiness is still developing")
+        priority += 1
+
+    signal = str(meta.get("market_signal_label") or "Market unavailable")
+    if signal == "Large disagreement":
+        reasons.append("Model and market show a large disagreement")
+        priority += 3
+    elif signal == "Notable difference":
+        reasons.append("Model and market show a notable difference")
+        priority += 2
+    elif meta.get("market_available") is not True:
+        reasons.append("Complete two-sided moneyline is unavailable")
+        priority += 1
+
+    if meta.get("confidence_guardrail_applied") is True:
+        reasons.append("Confidence guardrail reduced the displayed confidence")
+        priority += 2
+
+    if meta.get("season_phase") == "preseason":
+        reasons.append("Preseason participation uncertainty applies")
+        priority += 1
+
+    if priority >= 8:
+        level = "high"
+    elif priority >= 4:
+        level = "medium"
+    else:
+        level = "low"
+
+    away = str(game.get("away_team") or "Away")
+    home = str(game.get("home_team") or "Home")
+
+    return {
+        "game_id": game.get("game_id") or game.get("id"),
+        "matchup": f"{away} at {home}",
+        "away_team": away,
+        "home_team": home,
+        "pick": prediction.get("pick"),
+        "confidence": prediction.get("confidence"),
+        "priority_score": priority,
+        "priority_level": level,
+        "reasons": reasons,
+        "review_required": priority >= 4,
+    }
 
 
 def build_nfl_review(home_payload: dict[str, Any]) -> dict[str, Any]:
@@ -58,6 +128,15 @@ def build_nfl_review(home_payload: dict[str, Any]) -> dict[str, Any]:
         1
         for meta in metadata
         if isinstance(meta.get("prediction_waterfall"), dict)
+    )
+
+    attention_queue = sorted(
+        (_attention_item(item) for item in items),
+        key=lambda item: (
+            item["priority_score"],
+            item.get("confidence") or 0,
+        ),
+        reverse=True,
     )
 
     game_count = len(items)
@@ -111,6 +190,15 @@ def build_nfl_review(home_payload: dict[str, Any]) -> dict[str, Any]:
         },
         "readiness_distribution": dict(sorted(readiness_labels.items())),
         "market_signal_distribution": dict(sorted(market_signals.items())),
+        "attention": {
+            "review_required_games": sum(
+                1 for item in attention_queue if item["review_required"]
+            ),
+            "high_priority_games": sum(
+                1 for item in attention_queue if item["priority_level"] == "high"
+            ),
+            "queue": attention_queue,
+        },
         "prediction_impact": {
             "team_health": False,
             "team_intelligence": False,

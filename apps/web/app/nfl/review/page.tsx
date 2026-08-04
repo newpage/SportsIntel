@@ -149,6 +149,46 @@ export default async function NflReviewPage() {
       <section className="games">
         <div className="section-heading">
           <div>
+            <div className="eyebrow">Human review</div>
+            <h2>Attention queue</h2>
+          </div>
+          <div className="subtle">
+            {review.attention.review_required_games} games require review
+          </div>
+        </div>
+        <div className="grid">
+          {review.attention.queue.map((item) => (
+            <article className="card recommendation-card" key={item.game_id || item.matchup}>
+              <div className="section-heading">
+                <span className="status-badge">{item.priority_level}</span>
+                <span className="subtle">Priority {item.priority_score}</span>
+              </div>
+              <h3>{item.matchup}</h3>
+              <div className="game-pick-label">Current lean</div>
+              <div className="compact-pick-name">
+                {item.pick || "Not available"}
+                {item.confidence !== null && item.confidence !== undefined
+                  ? ` · ${item.confidence}%`
+                  : ""}
+              </div>
+              <ul>
+                {item.reasons.map((reason) => (
+                  <li key={reason}>{reason}</li>
+                ))}
+              </ul>
+              {item.game_id && (
+                <Link className="primary-button-link" href={`/nfl/${item.game_id}`}>
+                  Review game
+                </Link>
+              )}
+            </article>
+          ))}
+        </div>
+      </section>
+
+      <section className="games">
+        <div className="section-heading">
+          <div>
             <div className="eyebrow">Distributions</div>
             <h2>Readiness and market signals</h2>
           </div>

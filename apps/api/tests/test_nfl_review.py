@@ -6,6 +6,11 @@ def test_review_summarizes_nfl_games() -> None:
         "date": "2026-08-04",
         "games": [
             {
+                "game": {
+                    "game_id": "nfl.test.1",
+                    "away_team": "Away Team",
+                    "home_team": "Home Team",
+                },
                 "prediction": {
                     "confidence": 57,
                     "metadata": {
@@ -22,6 +27,11 @@ def test_review_summarizes_nfl_games() -> None:
                 }
             },
             {
+                "game": {
+                    "game_id": "nfl.test.2",
+                    "away_team": "Second Away",
+                    "home_team": "Second Home",
+                },
                 "prediction": {
                     "confidence": 55,
                     "metadata": {
@@ -48,6 +58,9 @@ def test_review_summarizes_nfl_games() -> None:
     assert review["context"]["preseason_games"] == 2
     assert review["context"]["market_available_games"] == 1
     assert review["status"] == "ready_for_review"
+    assert review["attention"]["review_required_games"] == 2
+    assert review["attention"]["queue"][0]["matchup"] == "Away Team at Home Team"
+    assert review["attention"]["queue"][0]["priority_level"] == "high"
 
 
 def test_review_handles_empty_schedule() -> None:

@@ -100,6 +100,22 @@ export type NflReviewResponse = {
   };
   readiness_distribution: Record<string, number>;
   market_signal_distribution: Record<string, number>;
+  attention: {
+    review_required_games: number;
+    high_priority_games: number;
+    queue: Array<{
+      game_id?: string | null;
+      matchup: string;
+      away_team: string;
+      home_team: string;
+      pick?: string | null;
+      confidence?: number | null;
+      priority_score: number;
+      priority_level: "high" | "medium" | "low" | string;
+      reasons: string[];
+      review_required: boolean;
+    }>;
+  };
   prediction_impact: Record<string, boolean>;
   status: "ready_for_review" | "partial" | string;
 };
