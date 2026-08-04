@@ -1,7 +1,11 @@
 from __future__ import annotations
 
 from datetime import date
+import os
+import time
 from typing import Any
+
+import httpx
 
 from app.sports import (
     GameStatus,
@@ -16,145 +20,216 @@ from app.sports import (
 )
 
 
-def _legacy_engine():
-    from app import engine
-    return engine
+NFL_SCOREBOARD_URL = os.getenv(
+    "NFL_SCOREBOARD_URL",
+    "https://site.api.espn.com/apis/site/v2/sports/football/nfl/scoreboard",
+)
+CACHE_SECONDS = 300
+_CACHE: tuple[float, list[SportGame]] | None = None
+_LAST_ERROR: str | None = None
 
 
-def _game_from_seed(game: dict[str, Any]) -> SportGame:
+def _status(value: str | None) -> GameStatus:
+    normalized = (value or "").strip().lower()
+
+    if normalized in {"in", "live"}:
+        return GameStatus.LIVE
+    if normalized in {"post", "final"}:
+        return GameStatus.FINAL
+    if "postpon" in normalized:
+        return GameStatus.POSTPONED
+    if "cancel" in normalized:
+        return GameStatus.CANCELLED
+    if normalized in {"pre", "scheduled"}:
+        return GameStatus.SCHEDULED
+    return GameStatus.UNKNOWN
+
+
+def _competitor(
+    competitors: list[dict[str, Any]],
+    side: str,
+) -> dict[str, Any] | None:
+    return next(
+        (
+            item
+            for item in competitors
+            if item.get("homeAway") == side
+        ),
+        None,
+    )
+
+
+def _score(value: Any) -> int | float | None:
+    if value in (None, ""):
+        return None
+
+    try:
+        number = float(value)
+    except (TypeError, ValueError):
+        return None
+
+    return int(number) if number.is_integer() else number
+
+
+def _team_name(competitor: dict[str, Any] | None) -> str:
+    if not competitor:
+        return "Unknown Team"
+
+    team = competitor.get("team", {})
+    return (
+        team.get("displayName")
+        or team.get("shortDisplayName")
+        or team.get("name")
+        or "Unknown Team"
+    )
+
+
+def _game_from_event(event: dict[str, Any]) -> SportGame | None:
+    competition = next(
+        iter(event.get("competitions", [])),
+        None,
+    )
+    if not isinstance(competition, dict):
+        return None
+
+    competitors = competition.get("competitors", [])
+    away = _competitor(competitors, "away")
+    home = _competitor(competitors, "home")
+
+    if not away or not home:
+        return None
+
+    status_type = (
+        event.get("status", {})
+        .get("type", {})
+    )
+    venue = competition.get("venue", {})
+
     return SportGame(
         sport="nfl",
-        game_id=str(game["game_id"]),
-        away_team=str(game["away_team"]),
-        home_team=str(game["home_team"]),
-        start_time="TBD",
-        status=GameStatus.UNKNOWN,
+        game_id=f'nfl-{event.get("id")}',
+        away_team=_team_name(away),
+        home_team=_team_name(home),
+        start_time=event.get("date") or "TBD",
+        status=_status(status_type.get("state")),
+        away_score=_score(away.get("score")),
+        home_score=_score(home.get("score")),
+        venue=venue.get("fullName"),
         metadata={
-            "data_mode": "seeded",
-            "schedule_confirmed": False,
-            "legacy_seed": game,
+            "data_mode": "live_schedule",
+            "schedule_confirmed": True,
+            "source": "ESPN scoreboard",
+            "source_event_id": event.get("id"),
+            "status_detail": status_type.get("detail"),
+            "status_description": status_type.get("description"),
+            "season": event.get("season", {}),
+            "week": event.get("week", {}),
+            "broadcasts": competition.get("broadcasts", []),
         },
     )
 
 
-def _prediction_from_legacy(prediction: Any) -> SportPrediction:
-    payload = prediction.model_dump() if hasattr(prediction, "model_dump") else prediction.dict()
+def _fetch_schedule(
+    target_date: date | None = None,
+) -> list[SportGame]:
+    global _CACHE, _LAST_ERROR
 
-    factors = [
-        {
-            "factor_id": "power_rating",
-            "name": "Team Power Rating",
-            "category": "team_strength",
-            "score": payload.get("projected_margin", 0),
-            "weight": 1.0,
-            "reliability": 0.55,
-            "explanation": next(
-                (reason for reason in payload.get("reasons", []) if "power rating" in reason.lower()),
-                "Existing NFL engine power-rating contribution.",
-            ),
-            "direction": "home" if payload.get("winner") == payload.get("home_team") else "away",
-            "usage": "active",
-            "version": "legacy-nfl-v1",
-            "contributes_to": ["moneyline", "spread"],
-            "used_in_confidence": True,
-        },
-        {
-            "factor_id": "recent_form",
-            "name": "Recent Form",
-            "category": "team_form",
-            "score": 0.0,
-            "weight": 1.0,
-            "reliability": 0.45,
-            "explanation": next(
-                (reason for reason in payload.get("reasons", []) if "recent form" in reason.lower()),
-                "Existing NFL engine recent-form contribution.",
-            ),
-            "direction": "neutral",
-            "usage": "active",
-            "version": "legacy-nfl-v1",
-            "contributes_to": ["moneyline", "spread", "total"],
-            "used_in_confidence": True,
-        },
-        {
-            "factor_id": "news_impact",
-            "name": "Yahoo News Impact",
-            "category": "availability",
-            "score": float(payload.get("news_impact", 0)),
-            "weight": 1.0,
-            "reliability": 0.6,
-            "explanation": next(
-                (reason for reason in payload.get("reasons", []) if "yahoo" in reason.lower()),
-                "No material Yahoo news adjustment is currently applied.",
-            ),
-            "direction": "neutral",
-            "usage": "active",
-            "version": "legacy-nfl-v1",
-            "contributes_to": ["moneyline", "spread", "total"],
-            "used_in_confidence": True,
-        },
-    ]
+    now = time.monotonic()
+    if target_date is None and _CACHE and _CACHE[0] > now:
+        return _CACHE[1]
 
+    params: dict[str, str | int] = {"limit": 100}
+    if target_date is not None:
+        params["dates"] = target_date.strftime("%Y%m%d")
+
+    try:
+        response = httpx.get(
+            NFL_SCOREBOARD_URL,
+            params=params,
+            headers={"User-Agent": "SportsIntel/1.0"},
+            timeout=15,
+        )
+        response.raise_for_status()
+        payload = response.json()
+
+        games = [
+            game
+            for event in payload.get("events", [])
+            if (game := _game_from_event(event)) is not None
+        ]
+        games.sort(key=lambda item: str(item.start_time))
+
+        _LAST_ERROR = None
+        if target_date is None:
+            _CACHE = (now + CACHE_SECONDS, games)
+
+        return games
+    except Exception as exc:
+        _LAST_ERROR = f"{type(exc).__name__}: {exc}"
+        return []
+
+
+def _unavailable_prediction(game: SportGame) -> SportPrediction:
     markets = [
         MarketPrediction(
             market_type=MarketType.MONEYLINE,
-            selection=payload.get("winner"),
-            confidence=payload.get("confidence"),
-            projected_value=payload.get("win_probability"),
-            recommendation="Model pick",
-            factor_ids=("power_rating", "recent_form", "news_impact"),
+            selection=None,
+            confidence=None,
+            recommendation="Awaiting NFL model",
+            explanation=(
+                "The live schedule is available, but this matchup "
+                "has not yet been scored by SportsIntel."
+            ),
         ),
         MarketPrediction(
             market_type=MarketType.SPREAD,
-            selection=payload.get("spread_pick"),
+            selection=None,
             confidence=None,
-            line=payload.get("market_spread"),
-            projected_value=payload.get("projected_margin"),
-            factor_ids=("power_rating", "recent_form", "news_impact"),
+            recommendation="Awaiting NFL model",
         ),
         MarketPrediction(
             market_type=MarketType.TOTAL,
-            selection=payload.get("total_pick"),
+            selection=None,
             confidence=None,
-            line=payload.get("market_total"),
-            projected_value=payload.get("projected_total"),
-            factor_ids=("recent_form", "news_impact"),
+            recommendation="Awaiting NFL model",
         ),
     ]
 
     return SportPrediction(
         sport="nfl",
-        game_id=str(payload["game_id"]),
-        pick=payload.get("winner"),
-        confidence=payload.get("confidence"),
-        recommendation="Existing NFL model",
-        factors=factors,
+        game_id=game.game_id,
+        pick=None,
+        confidence=None,
+        recommendation="Prediction not available yet",
+        factors=[],
         timeline=[],
         markets=markets,
         explanation={
-            "title": "Why SportsIntel Likes This Pick",
-            "summary": payload.get("reasons", ["Existing NFL model output."])[0]
-            if payload.get("reasons")
-            else "Existing NFL model output.",
-            "reasons": payload.get("reasons", []),
+            "title": "NFL prediction pending",
+            "summary": (
+                "SportsIntel has the confirmed schedule for this game. "
+                "Prediction scoring will be enabled in the next NFL model phase."
+            ),
+            "reasons": [],
         },
-        model_version="legacy-nfl-v1",
+        model_version="nfl-schedule-v1",
         metadata={
-            "data_mode": "seeded",
-            "schedule_confirmed": False,
-            "survivor_score": payload.get("survivor_score"),
-            "news": payload.get("news", []),
-            "legacy_prediction": payload,
+            "data_mode": "live_schedule",
+            "schedule_confirmed": True,
+            "prediction_available": False,
         },
     )
 
 
 class NFLProvider(SportProvider):
+    """Live NFL schedule provider with prediction-safe placeholders."""
+
     sport_key = "nfl"
     display_name = "National Football League"
     capabilities = SportCapabilities(
-        moneyline=True,
-        spread=True,
-        totals=True,
+        moneyline=False,
+        spread=False,
+        totals=False,
         player_props=False,
         live=False,
         standings=False,
@@ -163,34 +238,24 @@ class NFLProvider(SportProvider):
     )
 
     def schedule(self, target_date: date | None = None) -> list[SportGame]:
-        engine = _legacy_engine()
-        return [_game_from_seed(game) for game in engine.GAMES]
+        return _fetch_schedule(target_date)
 
     def predict(self, game: SportGame) -> SportPrediction:
-        engine = _legacy_engine()
-        seed = game.metadata.get("legacy_seed")
-
-        if not isinstance(seed, dict):
-            seed = next(
-                (item for item in engine.GAMES if str(item.get("game_id")) == game.game_id),
-                None,
-            )
-
-        if not isinstance(seed, dict):
-            raise KeyError(f"NFL game not found: {game.game_id}")
-
-        return _prediction_from_legacy(engine.predict(seed))
+        return _unavailable_prediction(game)
 
     def health(self) -> dict[str, Any]:
         payload = super().health()
         payload.update(
             {
-                "adapter": "legacy-nfl-seeded-v1",
+                "adapter": "nfl-live-schedule-v1",
                 "status": "available",
                 "import_mode": "lazy",
                 "data_available": True,
-                "data_mode": "seeded",
-                "schedule_confirmed": False,
+                "data_mode": "live_schedule",
+                "schedule_confirmed": True,
+                "prediction_available": False,
+                "cache_seconds": CACHE_SECONDS,
+                "last_error": _LAST_ERROR,
             }
         )
         return payload

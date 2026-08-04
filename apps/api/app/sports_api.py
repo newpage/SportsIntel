@@ -34,9 +34,9 @@ SPORT_CATALOG: dict[str, dict[str, Any]] = {
         "endpoint": "/api/sports/nfl",
         "legacy_endpoint": None,
         "capabilities": {
-            "moneyline": True,
-            "spread": True,
-            "totals": True,
+            "moneyline": False,
+            "spread": False,
+            "totals": False,
             "player_props": False,
             "live": False,
             "standings": False,
