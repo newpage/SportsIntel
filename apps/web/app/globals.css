@@ -566,3 +566,83 @@ button:focus-visible,a:focus-visible { outline:none; box-shadow:var(--focus-ring
   font-size:12px;
 }
 
+/* Prediction Factor Engine shadow score */
+.shadow-score-card {
+  margin-bottom:14px;
+  padding:14px;
+  border:1px dashed var(--line);
+  border-radius:14px;
+  background:var(--surface-soft);
+}
+.shadow-score-heading {
+  display:flex;
+  align-items:flex-start;
+  justify-content:space-between;
+  gap:12px;
+}
+.shadow-score-heading > div {
+  display:flex;
+  flex-direction:column;
+  gap:2px;
+}
+.shadow-score-heading span {
+  color:var(--muted);
+  font-size:11px;
+  font-weight:800;
+  text-transform:uppercase;
+}
+.shadow-score-badge {
+  padding:5px 8px;
+  border-radius:999px;
+  background:rgba(100,116,139,.14);
+  white-space:nowrap;
+}
+.shadow-score-comparison {
+  display:grid;
+  grid-template-columns:repeat(3,minmax(0,1fr));
+  gap:8px;
+  margin-top:12px;
+}
+.shadow-score-comparison > div {
+  padding:10px;
+  border:1px solid var(--line);
+  border-radius:12px;
+}
+.shadow-score-comparison span {
+  display:block;
+  color:var(--muted);
+  font-size:11px;
+  text-transform:uppercase;
+}
+.shadow-score-comparison strong {
+  display:block;
+  margin-top:3px;
+  font-size:18px;
+}
+.shadow-score-result {
+  margin-top:12px;
+}
+.shadow-score-result p {
+  margin:5px 0 0;
+}
+.shadow-contribution-list {
+  display:grid;
+  gap:6px;
+  margin-top:12px;
+}
+.shadow-contribution-list > div {
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap:12px;
+  font-size:12px;
+}
+.shadow-contribution-list span {
+  color:var(--muted);
+}
+@media (max-width:640px) {
+  .shadow-score-comparison {
+    grid-template-columns:1fr;
+  }
+}
+

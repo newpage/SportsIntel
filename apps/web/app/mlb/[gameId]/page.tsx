@@ -123,6 +123,7 @@ export default async function MlbGamePage({ params }: { params: Promise<{ gameId
             details={game.confidence_details}
             predictionFactors={game.prediction_factors}
             modelCoverage={game.factor_model_coverage}
+            shadowScore={game.factor_shadow_score}
             factorEngineVersion={game.factor_engine_version}
             factorEngineAffectsConfidence={game.factor_engine_affects_confidence}
           />

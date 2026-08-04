@@ -26,6 +26,25 @@ type PredictionFactor = {
   used_in_confidence: boolean;
 };
 
+type ShadowContribution = {
+  factor_id: string;
+  name: string;
+  edge: number;
+};
+
+type ShadowScore = {
+  mode: string;
+  official_model_unchanged: boolean;
+  pick: string;
+  confidence: number;
+  agrees_with_official_pick: boolean;
+  confidence_difference: number;
+  home_edge: number;
+  away_edge: number;
+  contributions: ShadowContribution[];
+  summary: string;
+};
+
 type ModelCoverage = {
   active_factors: number;
   observation_only_factors: number;
@@ -44,6 +63,7 @@ type Props = {
   details: ConfidenceDetailsData;
   predictionFactors?: PredictionFactor[];
   modelCoverage?: ModelCoverage;
+  shadowScore?: ShadowScore;
   factorEngineVersion?: string;
   factorEngineAffectsConfidence?: boolean;
   variant?: "hero" | "panel";
@@ -64,6 +84,7 @@ export function ConfidenceDetails({
   details,
   predictionFactors = [],
   modelCoverage,
+  shadowScore,
   factorEngineVersion,
   factorEngineAffectsConfidence = false,
   variant = "panel",
@@ -179,6 +200,54 @@ export function ConfidenceDetails({
                     <span>{modelCoverage.missing_planned_areas.join(" · ")}</span>
                   </div>
                 )}
+              </div>
+            )}
+
+            {shadowScore && (
+              <div className="shadow-score-card">
+                <div className="shadow-score-heading">
+                  <div>
+                    <span>Experimental comparison</span>
+                    <strong>Shadow Score</strong>
+                  </div>
+                  <span className="shadow-score-badge">Does not affect picks</span>
+                </div>
+                <div className="shadow-score-comparison">
+                  <div>
+                    <span>Official</span>
+                    <strong>{confidence}%</strong>
+                  </div>
+                  <div>
+                    <span>Shadow</span>
+                    <strong>{shadowScore.confidence}%</strong>
+                  </div>
+                  <div>
+                    <span>Difference</span>
+                    <strong>
+                      {shadowScore.confidence_difference > 0 ? "+" : ""}
+                      {shadowScore.confidence_difference}
+                    </strong>
+                  </div>
+                </div>
+                <div className="shadow-score-result">
+                  <strong>
+                    {shadowScore.agrees_with_official_pick
+                      ? `Agreement: ${shadowScore.pick}`
+                      : `Disagreement: ${shadowScore.pick}`}
+                  </strong>
+                  <p>{shadowScore.summary}</p>
+                </div>
+                <div className="shadow-contribution-list">
+                  {shadowScore.contributions.map((item) => (
+                    <div key={item.factor_id}>
+                      <span>{item.name}</span>
+                      <strong>
+                        {item.edge > 0 ? "+" : ""}
+                        {item.edge.toFixed(4)}
+                      </strong>
+                    </div>
+                  ))}
+                </div>
               </div>
             )}
 
