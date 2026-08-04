@@ -117,6 +117,27 @@ export default async function NflGamePage({
       ? metadata.preseason_week
       : null;
   const isPreseason = seasonPhase === "preseason";
+  const marketAvailable = metadata.market_available === true;
+  const awayMoneyline =
+    typeof metadata.away_moneyline === "number"
+      ? metadata.away_moneyline
+      : null;
+  const homeMoneyline =
+    typeof metadata.home_moneyline === "number"
+      ? metadata.home_moneyline
+      : null;
+  const modelPickProbability =
+    typeof metadata.model_pick_probability === "number"
+      ? metadata.model_pick_probability
+      : null;
+  const marketPickProbability =
+    typeof metadata.market_pick_probability === "number"
+      ? metadata.market_pick_probability
+      : null;
+  const marketEdge =
+    typeof metadata.market_edge === "number"
+      ? metadata.market_edge
+      : null;
 
   return (
     <main>
@@ -303,6 +324,46 @@ export default async function NflGamePage({
               <span>Home rating identity</span>
               <strong>{game.home_team}</strong>
               <small>Uses {homeTeamNormalized}</small>
+            </div>
+          </section>
+        )}
+
+        {marketAvailable && (
+          <section className="mlb-detail-grid">
+            <div className="market-card">
+              <span>Yahoo moneyline</span>
+              <strong>
+                {game.away_team} {awayMoneyline !== null
+                  ? (awayMoneyline > 0 ? `+${awayMoneyline}` : awayMoneyline)
+                  : "—"}
+              </strong>
+              <small>
+                {game.home_team} {homeMoneyline !== null
+                  ? (homeMoneyline > 0 ? `+${homeMoneyline}` : homeMoneyline)
+                  : "—"}
+              </small>
+            </div>
+            <div className="market-card">
+              <span>Model vs. market</span>
+              <strong>
+                {modelPickProbability !== null
+                  ? `${(modelPickProbability * 100).toFixed(1)}% model`
+                  : "Model unavailable"}
+              </strong>
+              <small>
+                {marketPickProbability !== null
+                  ? `${(marketPickProbability * 100).toFixed(1)}% no-vig market`
+                  : "Market probability unavailable"}
+              </small>
+            </div>
+            <div className="market-card">
+              <span>Model edge</span>
+              <strong>
+                {marketEdge !== null
+                  ? `${marketEdge >= 0 ? "+" : ""}${(marketEdge * 100).toFixed(1)}%`
+                  : "—"}
+              </strong>
+              <small>Observation only in Sprint 12.1</small>
             </div>
           </section>
         )}

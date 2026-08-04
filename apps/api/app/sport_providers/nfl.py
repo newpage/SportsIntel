@@ -369,6 +369,146 @@ def _qb_context(
     }
 
 
+
+def _american_odds(value: Any) -> int | None:
+    if value in (None, ""):
+        return None
+
+    if isinstance(value, str):
+        cleaned = value.strip().replace("−", "-")
+        if cleaned.upper() in {"EVEN", "EV", "PK"}:
+            return 100
+        if cleaned.startswith("+"):
+            cleaned = cleaned[1:]
+        try:
+            number = int(float(cleaned))
+        except ValueError:
+            return None
+    elif isinstance(value, (int, float)):
+        number = int(value)
+    else:
+        return None
+
+    if number == 0:
+        return None
+    return number
+
+
+def _implied_probability(american_odds: int | None) -> float | None:
+    if american_odds is None:
+        return None
+
+    if american_odds > 0:
+        return round(100 / (american_odds + 100), 4)
+
+    return round(
+        abs(american_odds) / (abs(american_odds) + 100),
+        4,
+    )
+
+
+def _first_odds_value(
+    payload: Any,
+    keys: tuple[str, ...],
+) -> int | None:
+    normalized_keys = {key.lower() for key in keys}
+
+    if isinstance(payload, dict):
+        for key, value in payload.items():
+            if str(key).lower() in normalized_keys:
+                parsed = _american_odds(value)
+                if parsed is not None:
+                    return parsed
+
+        for value in payload.values():
+            parsed = _first_odds_value(value, keys)
+            if parsed is not None:
+                return parsed
+
+    if isinstance(payload, list):
+        for value in payload:
+            parsed = _first_odds_value(value, keys)
+            if parsed is not None:
+                return parsed
+
+    return None
+
+
+def _market_context(
+    scoreboard: dict[str, Any],
+    game_id: str,
+) -> dict[str, Any]:
+    odds = _collection_item(
+        scoreboard.get("gameodds", {}),
+        game_id,
+        "nfl.g.",
+    )
+
+    if not odds:
+        return {
+            "available": False,
+            "source": None,
+            "away_moneyline": None,
+            "home_moneyline": None,
+            "away_implied_probability": None,
+            "home_implied_probability": None,
+            "away_no_vig_probability": None,
+            "home_no_vig_probability": None,
+            "market_hold": None,
+        }
+
+    away_moneyline = _first_odds_value(
+        odds,
+        (
+            "away_moneyline",
+            "away_ml",
+            "awaymoneyline",
+            "moneyline_away",
+            "away_odds",
+        ),
+    )
+    home_moneyline = _first_odds_value(
+        odds,
+        (
+            "home_moneyline",
+            "home_ml",
+            "homemoneyline",
+            "moneyline_home",
+            "home_odds",
+        ),
+    )
+
+    away_implied = _implied_probability(away_moneyline)
+    home_implied = _implied_probability(home_moneyline)
+
+    away_no_vig = None
+    home_no_vig = None
+    market_hold = None
+
+    if away_implied is not None and home_implied is not None:
+        total = away_implied + home_implied
+        if total > 0:
+            away_no_vig = round(away_implied / total, 4)
+            home_no_vig = round(home_implied / total, 4)
+            market_hold = round(total - 1, 4)
+
+    return {
+        "available": (
+            away_moneyline is not None
+            and home_moneyline is not None
+        ),
+        "source": "Yahoo Sports" if odds else None,
+        "away_moneyline": away_moneyline,
+        "home_moneyline": home_moneyline,
+        "away_implied_probability": away_implied,
+        "home_implied_probability": home_implied,
+        "away_no_vig_probability": away_no_vig,
+        "home_no_vig_probability": home_no_vig,
+        "market_hold": market_hold,
+        "raw": odds,
+    }
+
+
 def _yahoo_game(
     game_id: str,
     payload: dict[str, Any],
@@ -403,6 +543,7 @@ def _yahoo_game(
     home_record = _yahoo_team_record(scoreboard, home_value)
     away_qb = _qb_context(scoreboard, game_id, away_team, "away")
     home_qb = _qb_context(scoreboard, game_id, home_team, "home")
+    market = _market_context(scoreboard, game_id)
 
     status_text = (
         payload.get("status")
@@ -456,6 +597,8 @@ def _yahoo_game(
             "away_qb": away_qb,
             "home_qb": home_qb,
             "qb_affects_prediction": False,
+            "market": market,
+            "market_affects_prediction": False,
         },
     )
 
@@ -748,6 +891,42 @@ def _moneyline_prediction(game: SportGame) -> SportPrediction:
 
     confidence = min(raw_confidence, confidence_cap)
 
+    market = game.metadata.get("market", {})
+    market_available = bool(
+        isinstance(market, dict)
+        and market.get("available")
+    )
+    model_pick_probability = probability
+
+    if pick == game.away_team:
+        market_pick_probability = (
+            market.get("away_no_vig_probability")
+            if market_available
+            else None
+        )
+        pick_moneyline = (
+            market.get("away_moneyline")
+            if market_available
+            else None
+        )
+    else:
+        market_pick_probability = (
+            market.get("home_no_vig_probability")
+            if market_available
+            else None
+        )
+        pick_moneyline = (
+            market.get("home_moneyline")
+            if market_available
+            else None
+        )
+
+    market_edge = (
+        round(model_pick_probability - market_pick_probability, 4)
+        if isinstance(market_pick_probability, (int, float))
+        else None
+    )
+
     factors = [
         {
             "factor_id": "team_rating",
@@ -825,6 +1004,36 @@ def _moneyline_prediction(game: SportGame) -> SportPrediction:
             "contributes_to": [],
             "used_in_confidence": False,
         },
+        {
+            "factor_id": "market_moneyline",
+            "name": "Market Moneyline",
+            "category": "market",
+            "score": market_edge or 0.0,
+            "weight": 0.0,
+            "reliability": 0.8 if market_available else 0.0,
+            "explanation": (
+                (
+                    f"SportsIntel probability: "
+                    f"{model_pick_probability * 100:.1f}%; "
+                    f"market no-vig probability: "
+                    f"{market_pick_probability * 100:.1f}%; "
+                    f"edge: {market_edge * 100:+.1f}%."
+                )
+                if market_edge is not None
+                else "Moneyline odds are not available for this game."
+            ),
+            "direction": (
+                "positive"
+                if market_edge is not None and market_edge > 0
+                else "negative"
+                if market_edge is not None and market_edge < 0
+                else "neutral"
+            ),
+            "usage": "observation_only",
+            "version": RATING_VERSION,
+            "contributes_to": [],
+            "used_in_confidence": False,
+        },
     ]
 
     markets = [
@@ -832,9 +1041,26 @@ def _moneyline_prediction(game: SportGame) -> SportPrediction:
             market_type=MarketType.MONEYLINE,
             selection=pick,
             confidence=confidence,
+            line=pick_moneyline,
             projected_value=probability,
-            recommendation="Early model lean",
-            factor_ids=("team_rating", "home_field"),
+            recommendation=(
+                "Positive model edge"
+                if market_edge is not None and market_edge > 0.02
+                else "Market-aligned lean"
+                if market_edge is not None
+                else "Early model lean"
+            ),
+            explanation=(
+                f"Model edge versus no-vig market: "
+                f"{market_edge * 100:+.1f}%."
+                if market_edge is not None
+                else "Market moneyline is not available."
+            ),
+            factor_ids=(
+                "team_rating",
+                "home_field",
+                "market_moneyline",
+            ),
         ),
         MarketPrediction(
             market_type=MarketType.SPREAD,
@@ -922,6 +1148,41 @@ def _moneyline_prediction(game: SportGame) -> SportPrediction:
             "season_detection_source": (
                 season_context["season_detection_source"]
             ),
+            "market_available": market_available,
+            "market_source": (
+                market.get("source")
+                if isinstance(market, dict)
+                else None
+            ),
+            "away_moneyline": (
+                market.get("away_moneyline")
+                if isinstance(market, dict)
+                else None
+            ),
+            "home_moneyline": (
+                market.get("home_moneyline")
+                if isinstance(market, dict)
+                else None
+            ),
+            "away_market_probability": (
+                market.get("away_no_vig_probability")
+                if isinstance(market, dict)
+                else None
+            ),
+            "home_market_probability": (
+                market.get("home_no_vig_probability")
+                if isinstance(market, dict)
+                else None
+            ),
+            "market_hold": (
+                market.get("market_hold")
+                if isinstance(market, dict)
+                else None
+            ),
+            "model_pick_probability": model_pick_probability,
+            "market_pick_probability": market_pick_probability,
+            "market_edge": market_edge,
+            "market_affects_prediction": False,
         },
     )
 
