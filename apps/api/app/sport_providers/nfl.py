@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from datetime import date, timedelta
+from email.utils import parsedate_to_datetime
 import json
 import os
 import time
@@ -607,12 +608,16 @@ def _season_context(game: SportGame) -> dict[str, Any]:
     )
 
     game_date = None
-    try:
-        raw_start = str(game.start_time)
-        if raw_start and raw_start != "TBD":
+    raw_start = str(game.start_time or "").strip()
+
+    if raw_start and raw_start != "TBD":
+        try:
             game_date = date.fromisoformat(raw_start[:10])
-    except (TypeError, ValueError):
-        game_date = None
+        except ValueError:
+            try:
+                game_date = parsedate_to_datetime(raw_start).date()
+            except (TypeError, ValueError, OverflowError):
+                game_date = None
 
     calendar_preseason = bool(
         game_date
@@ -636,7 +641,7 @@ def _season_context(game: SportGame) -> dict[str, Any]:
             "preseason_confidence_cap": None,
             "season_detection_source": (
                 "schedule metadata"
-                if joined
+                if joined and not calendar_preseason
                 else "calendar fallback"
             ),
         }
