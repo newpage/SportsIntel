@@ -1,111 +1,133 @@
 import Link from "next/link";
-import { getHome } from "../lib/api";
+import { getSport } from "../lib/api";
+import type { SportGameEnvelope, SportHomeResponse } from "../lib/sports";
 
-function ConfidenceBar({ value }: { value: number }) {
-  return <div className="confidence-track"><span style={{ width: `${value}%` }} /></div>;
+function formatGameTime(value: string) {
+  if (!value || value === "TBD") return "Time TBD";
+
+  const parsed = new Date(value);
+  if (Number.isNaN(parsed.getTime())) return value;
+
+  return parsed.toLocaleString("en-US", {
+    weekday: "short",
+    month: "short",
+    day: "numeric",
+    hour: "numeric",
+    minute: "2-digit",
+  });
 }
 
-function SecondaryPick({ title, pick, confidence, why, href }: any) {
-  return (
-    <Link className="card compact-pick" href={href}>
-      <div>
-        <div className="kicker">{title}</div>
-        <div className="compact-pick-name">{pick}</div>
-        <div className="compact-reason">{why}</div>
-      </div>
-      <div className="compact-score">
-        <strong>{confidence}%</strong>
-        <span>confidence</span>
-      </div>
-    </Link>
-  );
+function moneylineMarket(item: SportGameEnvelope) {
+  const markets = Array.isArray(item.prediction.markets)
+    ? item.prediction.markets
+    : [];
+
+  return markets.find((market) => market.market_type === "moneyline");
 }
 
 export default async function HomePage() {
-  const data = await getHome();
-  const topNews = data.latest_news?.[0];
-  const totalReason =
-    data.best_total.reasons.find((reason: string) => reason.startsWith("Model total")) ??
-    data.best_total.reasons[0];
+  const data = (await getSport("nfl")) as SportHomeResponse;
+  const games = data.games || [];
 
   return (
     <main>
       <header>
         <div>
           <div className="logo">SportsIntel</div>
-          <div className="subtle">NFL Week {data.week}</div>
+          <div className="subtle">NFL schedule and early moneyline model</div>
         </div>
-        <nav className="top-nav"><Link href="/">NFL</Link><Link href="/mlb">MLB</Link><Link href="/my-picks">My Picks</Link></nav>
+        <nav className="top-nav">
+          <Link href="/">NFL</Link>
+          <Link href="/mlb">MLB</Link>
+          <Link href="/my-picks">My Picks</Link>
+        </nav>
       </header>
 
       <section className="home-intro">
         <div>
-          <div className="eyebrow">Your 60-second NFL brief</div>
-          <h1>One clear decision. The reasons that matter.</h1>
+          <div className="eyebrow">NFL is now live</div>
+          <h1>Confirmed games. Simple early leans.</h1>
         </div>
-        <div className="subtle home-intro-note">Yahoo Sports is the only news source used in this version.</div>
-      </section>
-
-      <section className="card hero-pick">
-        <div className="hero-pick-copy">
-          <div className="kicker">Best Survivor Pick</div>
-          <div className="hero-pick-name">{data.best_survivor.winner}</div>
-          <div className="hero-pick-reason">{data.best_survivor.reasons[0]}</div>
-          <Link className="primary-button-link" href={`/games/${data.best_survivor.game_id}`}>
-            See why this is the pick →
-          </Link>
-        </div>
-        <div className="hero-confidence">
-          <strong>{data.best_survivor.confidence}%</strong>
-          <span>confidence</span>
-          <ConfidenceBar value={data.best_survivor.confidence} />
+        <div className="subtle home-intro-note">
+          Schedule source: {String(data.provider?.schedule_source || "Yahoo Sports")}
         </div>
       </section>
 
-      <section className="secondary-picks">
-        <SecondaryPick
-          title="Best Spread"
-          pick={data.best_spread.spread_pick}
-          confidence={data.best_spread.confidence}
-          why={data.best_spread.reasons[0]}
-          href={`/games/${data.best_spread.game_id}`}
-        />
-        <SecondaryPick
-          title="Best Total"
-          pick={`${data.best_total.total_pick} ${data.best_total.market_total}`}
-          confidence={data.best_total.confidence}
-          why={totalReason}
-          href={`/games/${data.best_total.game_id}`}
-        />
-      </section>
-
-      {topNews && (
-        <section className="card breaking-impact">
-          <div>
-            <div className="kicker">Biggest Yahoo News Impact</div>
-            <a href={topNews.link} target="_blank" rel="noreferrer" className="breaking-headline">
-              {topNews.title}
-            </a>
+      <section className="card breaking-impact">
+        <div>
+          <div className="kicker">Current model scope</div>
+          <div className="breaking-headline">Moneyline only</div>
+          <div className="subtle">
+            Ratings and home field are active. Spread, total, injuries, and
+            quarterback status are not included yet.
           </div>
-          <span className={topNews.impact < 0 ? "impact-badge negative" : "impact-badge positive"}>
-            {topNews.impact < 0 ? "Negative" : "Positive"} impact
-          </span>
-        </section>
-      )}
+        </div>
+        <span className="impact-badge positive">
+          {games.length} games
+        </span>
+      </section>
 
       <section className="games">
         <div className="section-heading">
-          <div><div className="eyebrow">Quick scan</div><h2>Today&apos;s Games</h2></div>
-          <span className="subtle">Tap for the full prediction.</span>
+          <div>
+            <div className="eyebrow">Upcoming schedule</div>
+            <h2>NFL Games</h2>
+          </div>
+          <span className="subtle">
+            Confidence is intentionally capped during the baseline phase.
+          </span>
         </div>
-        <div className="game-list">
-          {data.games.map((game: any) => (
-            <Link className="card game" key={game.game_id} href={`/games/${game.game_id}`}>
-              <span><strong>{game.away_team}</strong> at <strong>{game.home_team}</strong></span>
-              <span className="game-call">{game.winner} · {game.confidence}% →</span>
-            </Link>
-          ))}
-        </div>
+
+        {games.length === 0 ? (
+          <section className="card">
+            <div className="kicker">No games available</div>
+            <h2>The schedule provider returned no upcoming NFL games.</h2>
+            <p className="subtle">
+              Provider status: {String(data.provider?.last_error || "No error reported")}
+            </p>
+          </section>
+        ) : (
+          <div className="game-list">
+            {games.map((item) => {
+              const game = item.game;
+              const prediction = item.prediction;
+              const market = moneylineMarket(item);
+
+              return (
+                <article className="card game" key={game.game_id}>
+                  <div>
+                    <div className="kicker">
+                      {formatGameTime(game.start_time)}
+                    </div>
+                    <span>
+                      <strong>{game.away_team}</strong> at{" "}
+                      <strong>{game.home_team}</strong>
+                    </span>
+                    <div className="subtle">
+                      {game.venue || "Venue not yet available"}
+                    </div>
+                  </div>
+
+                  <div className="game-call">
+                    {prediction.pick ? (
+                      <>
+                        <strong>{prediction.pick}</strong>
+                        <span>
+                          {" "}· {prediction.confidence ?? "—"}%
+                        </span>
+                        <small>
+                          {market?.recommendation || prediction.recommendation}
+                        </small>
+                      </>
+                    ) : (
+                      <span>Prediction pending</span>
+                    )}
+                  </div>
+                </article>
+              );
+            })}
+          </div>
+        )}
       </section>
     </main>
   );
