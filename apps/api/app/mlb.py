@@ -5,6 +5,7 @@ import time
 import feedparser
 import httpx
 
+from app.mlb_factors import attach_mlb_prediction_factors
 from app.prediction_history import attach_prediction_history
 from app.yahoo_pitchers import apply_yahoo_probable_pitchers
 
@@ -528,6 +529,7 @@ def mlb_home() -> dict:
         for game in day.get("games", [])
     ]
     apply_yahoo_probable_pitchers(games)
+    attach_mlb_prediction_factors(games)
     games.sort(key=lambda game: game["start_time"])
     attach_prediction_history(games)
 
@@ -612,6 +614,7 @@ def mlb_results(days: int = 7) -> dict:
         for day in payload.get("dates", [])
         for game in day.get("games", [])
     ]
+    attach_mlb_prediction_factors(games)
     games.sort(key=lambda game: game["start_time"], reverse=True)
 
     return {
