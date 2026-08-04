@@ -35,7 +35,7 @@ def test_review_summarizes_nfl_games() -> None:
                 "prediction": {
                     "confidence": 55,
                     "metadata": {
-                        "data_readiness_label": "limited",
+                        "data_readiness_label": "developing",
                         "market_signal_label": "Market unavailable",
                         "season_phase": "preseason",
                         "market_available": False,
@@ -61,6 +61,9 @@ def test_review_summarizes_nfl_games() -> None:
     assert review["attention"]["review_required_games"] == 2
     assert review["attention"]["queue"][0]["matchup"] == "Away Team at Home Team"
     assert review["attention"]["queue"][0]["priority_level"] == "high"
+    assert review["attention"]["queue"][0]["disposition"] == "hold"
+    assert review["attention"]["disposition_counts"]["hold"] == 1
+    assert review["attention"]["disposition_counts"]["watch"] == 1
 
 
 def test_review_handles_empty_schedule() -> None:

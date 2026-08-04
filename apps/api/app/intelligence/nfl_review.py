@@ -5,7 +5,7 @@ from statistics import mean
 from typing import Any
 
 
-NFL_REVIEW_VERSION = "nfl-review-v2"
+NFL_REVIEW_VERSION = "nfl-review-v3"
 
 
 def _metadata(item: dict[str, Any]) -> dict[str, Any]:
@@ -72,10 +72,28 @@ def _attention_item(item: dict[str, Any]) -> dict[str, Any]:
 
     if priority >= 8:
         level = "high"
+        disposition = "hold"
+        disposition_label = "Hold for review"
+        recommended_action = (
+            "Do not promote this lean until the highest-priority data gaps "
+            "or disagreements are reviewed."
+        )
     elif priority >= 4:
         level = "medium"
+        disposition = "watch"
+        disposition_label = "Watch closely"
+        recommended_action = (
+            "Keep the lean visible, but review new quarterback, market, and "
+            "availability information before game time."
+        )
     else:
         level = "low"
+        disposition = "ready"
+        disposition_label = "Ready for review"
+        recommended_action = (
+            "No major review blocker is currently detected. Continue normal "
+            "pregame monitoring."
+        )
 
     away = str(game.get("away_team") or "Away")
     home = str(game.get("home_team") or "Home")
@@ -91,6 +109,9 @@ def _attention_item(item: dict[str, Any]) -> dict[str, Any]:
         "priority_level": level,
         "reasons": reasons,
         "review_required": priority >= 4,
+        "disposition": disposition,
+        "disposition_label": disposition_label,
+        "recommended_action": recommended_action,
     }
 
 
@@ -196,6 +217,13 @@ def build_nfl_review(home_payload: dict[str, Any]) -> dict[str, Any]:
             ),
             "high_priority_games": sum(
                 1 for item in attention_queue if item["priority_level"] == "high"
+            ),
+            "disposition_counts": dict(
+                sorted(
+                    Counter(
+                        item["disposition"] for item in attention_queue
+                    ).items()
+                )
             ),
             "queue": attention_queue,
         },

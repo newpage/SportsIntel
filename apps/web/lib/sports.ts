@@ -103,6 +103,7 @@ export type NflReviewResponse = {
   attention: {
     review_required_games: number;
     high_priority_games: number;
+    disposition_counts: Record<string, number>;
     queue: Array<{
       game_id?: string | null;
       matchup: string;
@@ -114,6 +115,9 @@ export type NflReviewResponse = {
       priority_level: "high" | "medium" | "low" | string;
       reasons: string[];
       review_required: boolean;
+      disposition: "ready" | "watch" | "hold" | string;
+      disposition_label: string;
+      recommended_action: string;
     }>;
   };
   prediction_impact: Record<string, boolean>;
