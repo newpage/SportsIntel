@@ -20,6 +20,15 @@ __all__ = [
     "StarterStatus",
     "TeamHealth",
     "TeamHealthEngine",
+    "PredictionWaterfall",
+    "WaterfallStep",
+    "build_prediction_waterfall",
 ]
 
 from app.intelligence.team_health import TeamHealth, TeamHealthEngine
+
+from app.intelligence.prediction_waterfall import (
+    PredictionWaterfall,
+    WaterfallStep,
+    build_prediction_waterfall,
+)

@@ -9,7 +9,7 @@ from typing import Any
 
 import httpx
 
-from app.intelligence import TeamHealthEngine
+from app.intelligence import TeamHealthEngine, build_prediction_waterfall
 from app.sport_providers.nfl_ratings import (
     HOME_FIELD_RATING,
     RATING_VERSION,
@@ -652,6 +652,7 @@ def _yahoo_game(
             "qb_affects_prediction": False,
             "market": market,
             "market_affects_prediction": False,
+            "prediction_waterfall": prediction_waterfall.to_dict(),
         },
     )
 
@@ -936,15 +937,16 @@ def _moneyline_prediction(game: SportGame) -> SportPrediction:
         data_readiness_score += 10
 
     if qb_confirmed:
-        confidence_cap = 68
+        readiness_confidence_cap = 68
         readiness_label = "strong"
     elif qb_announced:
-        confidence_cap = 64
+        readiness_confidence_cap = 64
         readiness_label = "developing"
     else:
-        confidence_cap = 60
+        readiness_confidence_cap = 60
         readiness_label = "limited"
 
+    confidence_cap = readiness_confidence_cap
     season_context = _season_context(game)
     preseason_cap = season_context.get("preseason_confidence_cap")
     if isinstance(preseason_cap, int):
@@ -991,6 +993,21 @@ def _moneyline_prediction(game: SportGame) -> SportPrediction:
         market_edge,
         pick,
         market_pick_probability,
+    )
+
+    prediction_waterfall = build_prediction_waterfall(
+        raw_confidence=raw_confidence,
+        final_confidence=confidence,
+        readiness_cap=readiness_confidence_cap,
+        final_cap=confidence_cap,
+        rating_gap=gap,
+        home_field_rating=HOME_FIELD_RATING,
+        season_phase=season_context["season_phase"],
+        qb_announced=qb_announced,
+        away_health=away_team_health.to_dict(),
+        home_health=home_team_health.to_dict(),
+        market_signal_label=market_signal["label"],
+        market_available=market_available,
     )
 
     factors = [
@@ -1202,6 +1219,7 @@ def _moneyline_prediction(game: SportGame) -> SportPrediction:
             "data_readiness_score": data_readiness_score,
             "data_readiness_label": readiness_label,
             "raw_confidence": raw_confidence,
+            "readiness_confidence_cap": readiness_confidence_cap,
             "confidence_cap": confidence_cap,
             "confidence_guardrail_applied": (
                 confidence < raw_confidence

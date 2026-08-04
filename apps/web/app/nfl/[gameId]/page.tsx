@@ -146,6 +146,17 @@ export default async function NflGamePage({
     typeof metadata.market_signal_summary === "string"
       ? metadata.market_signal_summary
       : "A complete moneyline market is not available.";
+  const predictionWaterfall =
+    metadata.prediction_waterfall &&
+    typeof metadata.prediction_waterfall === "object"
+      ? (metadata.prediction_waterfall as Record<string, unknown>)
+      : null;
+  const waterfallSteps = Array.isArray(predictionWaterfall?.steps)
+    ? predictionWaterfall.steps.filter(
+        (step): step is Record<string, unknown> =>
+          Boolean(step) && typeof step === "object",
+      )
+    : [];
 
   return (
     <main>
@@ -368,6 +379,43 @@ export default async function NflGamePage({
               <span>Market signal</span>
               <strong>{marketSignalLabel}</strong>
               <small>{marketSignalSummary}</small>
+            </div>
+          </section>
+        )}
+
+        {waterfallSteps.length > 0 && (
+          <section className="why-section">
+            <div className="eyebrow">Prediction waterfall</div>
+            <h2>How confidence reached {prediction.confidence ?? "—"}%</h2>
+            <div className="model-factor-list">
+              {waterfallSteps.map((step, index) => {
+                const value =
+                  typeof step.value === "number" ? step.value : 0;
+                const kind =
+                  typeof step.kind === "string" ? step.kind : "observation";
+                const valueLabel =
+                  kind === "baseline"
+                    ? `${value.toFixed(0)}%`
+                    : kind === "adjustment"
+                      ? `${value > 0 ? "+" : ""}${value.toFixed(0)}%`
+                      : "Observed";
+
+                return (
+                  <article
+                    className="model-factor-card"
+                    key={String(step.step_id || index)}
+                  >
+                    <div className="model-factor-heading">
+                      <div>
+                        <span>{kind}</span>
+                        <strong>{String(step.label || "Waterfall step")}</strong>
+                      </div>
+                      <strong>{valueLabel}</strong>
+                    </div>
+                    <p>{String(step.explanation || "")}</p>
+                  </article>
+                );
+              })}
             </div>
           </section>
         )}
