@@ -12,6 +12,7 @@ import httpx
 from app.intelligence import (
     TeamHealthEngine,
     build_consensus_line,
+    build_consensus_quality,
     build_prediction_waterfall,
     build_team_intelligence,
 )
@@ -1016,6 +1017,18 @@ def _moneyline_prediction(game: SportGame) -> SportPrediction:
         ),
     )
 
+    consensus_quality = build_consensus_quality(
+        market_available=market_available,
+        market_hold=(
+            market.get("market_hold")
+            if isinstance(market, dict)
+            else None
+        ),
+        readiness_label=readiness_label,
+        quarterbacks_announced=qb_announced,
+        season_phase=season_context["season_phase"],
+    )
+
     away_team_intelligence = build_team_intelligence(
         team=game.away_team,
         side="away",
@@ -1362,6 +1375,7 @@ def _moneyline_prediction(game: SportGame) -> SportPrediction:
             "market_betting_recommendation": market_signal["betting_recommendation"],
             "market_affects_prediction": False,
             "consensus": consensus.to_dict(),
+            "consensus_quality": consensus_quality.to_dict(),
             "consensus_affects_prediction": False,
         },
     )

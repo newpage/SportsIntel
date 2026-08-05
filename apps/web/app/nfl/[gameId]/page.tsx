@@ -166,6 +166,28 @@ export default async function NflGamePage({
     typeof consensus?.summary === "string"
       ? consensus.summary
       : "A complete no-vig moneyline market is not available.";
+  const consensusQuality =
+    metadata.consensus_quality &&
+    typeof metadata.consensus_quality === "object"
+      ? (metadata.consensus_quality as Record<string, unknown>)
+      : null;
+  const consensusQualityScore =
+    typeof consensusQuality?.score === "number"
+      ? consensusQuality.score
+      : null;
+  const consensusQualityLabel =
+    typeof consensusQuality?.label === "string"
+      ? consensusQuality.label
+      : "Unavailable";
+  const consensusQualityStatus =
+    typeof consensusQuality?.status === "string"
+      ? consensusQuality.status
+      : "hold";
+  const consensusQualityReasons = Array.isArray(consensusQuality?.reasons)
+    ? consensusQuality.reasons.filter(
+        (reason): reason is string => typeof reason === "string",
+      )
+    : [];
   const predictionWaterfall =
     metadata.prediction_waterfall &&
     typeof metadata.prediction_waterfall === "object"
@@ -426,6 +448,33 @@ export default async function NflGamePage({
               <span>Market favorite</span>
               <strong>{consensusMarketFavorite || "Even market"}</strong>
               <small>Does not change the SportsIntel pick</small>
+            </div>
+          </section>
+        )}
+
+        {consensusQuality && (
+          <section className="mlb-detail-grid">
+            <div className="market-card">
+              <span>Consensus quality</span>
+              <strong>
+                {consensusQualityScore !== null
+                  ? `${consensusQualityScore}% ${consensusQualityLabel}`
+                  : consensusQualityLabel}
+              </strong>
+              <small>Signal reliability, not prediction confidence</small>
+            </div>
+            <div className="market-card">
+              <span>Review status</span>
+              <strong>{consensusQualityStatus}</strong>
+              <small>Observation only</small>
+            </div>
+            <div className="market-card">
+              <span>Quality checks</span>
+              <strong>{consensusQualityReasons.length} checks</strong>
+              <small>
+                {consensusQualityReasons[0] ||
+                  "No quality explanation is available."}
+              </small>
             </div>
           </section>
         )}
