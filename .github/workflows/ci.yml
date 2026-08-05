@@ -204,3 +204,69 @@ jobs:
       - name: Tear down Compose stack
         if: always()
         run: docker compose down --volumes --remove-orphans
+
+  deployment-validation:
+    name: Production deployment assets
+    runs-on: ubuntu-latest
+    env:
+      SPORTSINTEL_ENV_FILE: ${{ github.workspace }}/.ci-production.env
+      COMPOSE_PROJECT_NAME: sportsintel-ci-production
+      API_PORT: "18300"
+      WEB_PORT: "13300"
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Install deployment validators
+        run: sudo apt-get update -qq && sudo apt-get install -y shellcheck apache2-utils
+
+      - name: Create restricted CI production environment
+        run: |
+          umask 027
+          cat > .ci-production.env <<'EOF'
+          SPORTSINTEL_ENV=production
+          SPORTSINTEL_VERSION=ci-preview
+          SPORTSINTEL_BUILD_TIMESTAMP=2026-01-01T00:00:00Z
+          SPORTSINTEL_GIT_COMMIT=ci-validation
+          SPORTSINTEL_ADMIN_KEY=ci-only-admin-key-0123456789abcdef
+          SPORTSINTEL_CORS_ORIGINS=https://preview.example.test
+          SPORTSINTEL_PUBLIC_RATE_LIMIT=60
+          SPORTSINTEL_ADMIN_RATE_LIMIT=20
+          SPORTSINTEL_TRUST_PROXY_HEADERS=true
+          NFL_SNAPSHOT_STORE=postgres
+          DATABASE_URL=postgresql://sportsintel_ci:ci-only-password@postgres:5432/sportsintel_ci
+          POSTGRES_DB=sportsintel_ci
+          POSTGRES_USER=sportsintel_ci
+          POSTGRES_PASSWORD=ci-only-password
+          NEXT_PUBLIC_API_URL=http://127.0.0.1:18300
+          PREDICTION_HISTORY_FILE=/app/data/prediction_history.json
+          EOF
+          chmod 640 .ci-production.env
+
+      - name: Validate shell assets
+        run: |
+          shellcheck deploy/linux/*.sh deploy/linux/lib/*.sh deploy/apache/create-preview-user.sh
+          deploy/tests/validate-deployment.sh
+
+      - name: Validate Apache template directives
+        run: |
+          grep -q 'AuthType Basic' deploy/apache/sportsintel.conf.example
+          grep -q 'ProxyPass.*127.0.0.1:8300' deploy/apache/sportsintel.conf.example
+          grep -q 'SSLEngine on' deploy/apache/sportsintel.conf.example
+
+      - name: Validate production Compose
+        run: docker compose -f docker-compose.production.yml config --quiet
+
+      - name: Build and smoke-test production Compose
+        run: |
+          docker compose -f docker-compose.production.yml build api web
+          docker compose -f docker-compose.production.yml up --detach
+          deploy/linux/smoke-test.sh --internal
+
+      - name: Collect production Compose logs on failure
+        if: failure()
+        run: docker compose -f docker-compose.production.yml logs --no-color
+
+      - name: Tear down production Compose
+        if: always()
+        run: docker compose -f docker-compose.production.yml down --volumes --remove-orphans
