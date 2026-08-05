@@ -1,11 +1,12 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { getSport } from "../../../lib/api";
+import { getNflChanges, getSport } from "../../../lib/api";
 import type {
   MarketPrediction,
   QualifiedConsensus,
   SportGameEnvelope,
   SportHomeResponse,
+  SnapshotChangesResponse,
 } from "../../../lib/sports";
 
 function formatGameTime(value: string) {
@@ -20,6 +21,19 @@ function formatGameTime(value: string) {
     day: "numeric",
     hour: "numeric",
     minute: "2-digit",
+  });
+}
+
+function formatCaptureTime(value: string) {
+  const parsed = new Date(value);
+  if (Number.isNaN(parsed.getTime())) return value;
+
+  return parsed.toLocaleString("en-US", {
+    month: "short",
+    day: "numeric",
+    hour: "numeric",
+    minute: "2-digit",
+    second: "2-digit",
   });
 }
 
@@ -63,6 +77,11 @@ export default async function NflGamePage({
   if (!item) notFound();
 
   const { game, prediction } = item;
+  const snapshotChanges = (await getNflChanges(
+    game.game_id,
+  )) as SnapshotChangesResponse | null;
+  const latestSnapshotChanges =
+    snapshotChanges?.latest_comparison?.changes.slice(0, 5) ?? [];
   const moneyline = market(item, "moneyline");
   const spread = market(item, "spread");
   const total = market(item, "total");
@@ -300,6 +319,47 @@ export default async function NflGamePage({
             <small>Planned for a later NFL sprint</small>
           </div>
         </section>
+
+        {snapshotChanges && (
+          <section className="why-section">
+            <div className="eyebrow">What changed</div>
+            <h2>
+              {snapshotChanges.previous_snapshot
+                ? `${snapshotChanges.significance.charAt(0).toUpperCase()}${snapshotChanges.significance.slice(1)} change`
+                : "No prior snapshot"}
+            </h2>
+            <p className="subtle">
+              Current capture:{" "}
+              {formatCaptureTime(snapshotChanges.current_snapshot.captured_at)}
+              {snapshotChanges.previous_snapshot && (
+                <>
+                  {" "}· Previous capture:{" "}
+                  {formatCaptureTime(
+                    snapshotChanges.previous_snapshot.captured_at,
+                  )}
+                </>
+              )}
+            </p>
+            <p>{snapshotChanges.summary}</p>
+            {latestSnapshotChanges.length > 0 && (
+              <div className="model-factor-list">
+                {latestSnapshotChanges.map((change) => (
+                  <article className="model-factor-card" key={change.field}>
+                    <div className="model-factor-heading">
+                      <strong>{change.label}</strong>
+                      <span>{change.significance}</span>
+                    </div>
+                    <p>{change.explanation}</p>
+                  </article>
+                ))}
+              </div>
+            )}
+            <p className="subtle">
+              Snapshot history is held in memory and resets when the API
+              service restarts.
+            </p>
+          </section>
+        )}
 
         {isPreseason && (
           <section className="card breaking-impact">

@@ -1,4 +1,4 @@
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, Query
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.engine import all_predictions
@@ -9,6 +9,13 @@ from app.intelligence.prediction_change import (
     PredictionComparison,
     PredictionComparisonRequest,
     compare_prediction_snapshots,
+)
+from app.intelligence.snapshot_store import (
+    SnapshotChangesResponse,
+    SnapshotClearAllResponse,
+    SnapshotClearGameResponse,
+    SnapshotHistoryResponse,
+    nfl_snapshot_store,
 )
 from app.sports_api import (
     sport_capabilities,
@@ -65,7 +72,9 @@ def sport_home(sport: str):
 
 @app.get("/api/sports/nfl/review")
 def nfl_review():
-    return build_nfl_review(sports_home("nfl"))
+    review = build_nfl_review(sports_home("nfl"))
+    review.update(nfl_snapshot_store.diagnostics().model_dump())
+    return review
 
 
 @app.post(
@@ -76,6 +85,62 @@ def compare_nfl_predictions(
     request: PredictionComparisonRequest,
 ) -> PredictionComparison:
     return compare_prediction_snapshots(request.previous, request.current)
+
+
+@app.post(
+    "/api/sports/nfl/history/clear",
+    response_model=SnapshotClearAllResponse,
+)
+def clear_nfl_snapshot_history() -> SnapshotClearAllResponse:
+    return nfl_snapshot_store.clear_all()
+
+
+@app.get(
+    "/api/sports/nfl/{game_id}/history",
+    response_model=SnapshotHistoryResponse,
+)
+def nfl_snapshot_history(
+    game_id: str,
+    limit: int = Query(default=10, ge=1, le=20),
+) -> SnapshotHistoryResponse:
+    snapshots = nfl_snapshot_store.get_history(game_id, limit)
+    if not snapshots:
+        raise HTTPException(
+            status_code=404,
+            detail="NFL snapshot history not found",
+        )
+    return SnapshotHistoryResponse(
+        game_id=game_id,
+        snapshot_count=nfl_snapshot_store.get_snapshot_count(game_id),
+        snapshots=snapshots,
+    )
+
+
+@app.get(
+    "/api/sports/nfl/{game_id}/changes",
+    response_model=SnapshotChangesResponse,
+)
+def nfl_snapshot_changes(game_id: str) -> SnapshotChangesResponse:
+    result = nfl_snapshot_store.get_changes(game_id)
+    if result is None:
+        raise HTTPException(
+            status_code=404,
+            detail="NFL snapshot history not found",
+        )
+    return result
+
+
+@app.delete(
+    "/api/sports/nfl/{game_id}/history",
+    response_model=SnapshotClearGameResponse,
+)
+def clear_nfl_game_snapshot_history(
+    game_id: str,
+) -> SnapshotClearGameResponse:
+    return SnapshotClearGameResponse(
+        game_id=game_id,
+        removed_snapshots=nfl_snapshot_store.clear_game(game_id),
+    )
 
 
 @app.get("/api/mlb")

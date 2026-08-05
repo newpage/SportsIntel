@@ -70,3 +70,36 @@ changes are minor; no meaningful changes produce `none`.
 
 The comparison contract is diagnostic only: picks, model probabilities,
 displayed confidence, ratings, and consensus calculations remain unchanged.
+
+## NFL automatic snapshot history
+
+The NFL sports endpoint automatically captures each available prediction into a
+thread-safe, process-local `PredictionSnapshotStore`. One timezone-aware UTC
+timestamp is shared by every game generated in the same response.
+
+History is memory-only:
+
+- At most 20 snapshots are retained per game.
+- History is returned newest first.
+- A snapshot is deduplicated when all comparison-relevant fields except
+  `captured_at` match an existing stored version.
+- Capture failures are logged and never fail the NFL response.
+- All history disappears whenever the API process restarts.
+- The store implements an isolated interface so persistent storage can replace
+  it in a future sprint.
+
+Diagnostic endpoints:
+
+- `GET /api/sports/nfl/{game_id}/history?limit=10` returns up to 20 snapshots.
+- `GET /api/sports/nfl/{game_id}/changes` returns the latest comparison, or a
+  typed “No prior snapshot” response when only one version exists.
+- `DELETE /api/sports/nfl/{game_id}/history` clears one game.
+- `POST /api/sports/nfl/history/clear` clears the entire in-memory store.
+
+Snapshot diagnostics are also included in `GET /api/sports/nfl/review`,
+including coverage, multiple-version counts, meaningful changes, major/notable
+change counts, store type, and persistence status.
+
+Snapshot history and all related endpoints remain observation-only and return
+`affects_prediction: false` where applicable. They do not change picks,
+probabilities, confidence, ratings, consensus, providers, or scheduling.

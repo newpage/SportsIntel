@@ -60,6 +60,62 @@ export type QualifiedConsensus = {
   model_version: string;
 };
 
+export type PredictionSnapshot = {
+  game_id: string;
+  captured_at: string;
+  pick: string;
+  model_probability: number;
+  displayed_confidence: number;
+  raw_confidence: number;
+  confidence_cap: number;
+  readiness_label: string;
+  season_phase: string;
+  away_qb_status: string;
+  home_qb_status: string;
+  away_moneyline?: number | null;
+  home_moneyline?: number | null;
+  market_pick_probability?: number | null;
+  model_market_edge?: number | null;
+  qualified_consensus_status: string;
+  qualified_consensus_classification: string;
+  qualified_consensus_quality_score: number;
+  model_version: string;
+};
+
+export type PredictionChange = {
+  field: string;
+  label: string;
+  previous_value: unknown;
+  current_value: unknown;
+  direction: "increased" | "decreased" | "changed" | "added" | "removed";
+  significance: "none" | "minor" | "notable" | "major";
+  explanation: string;
+};
+
+export type PredictionComparison = {
+  changed: boolean;
+  significance: "none" | "minor" | "notable" | "major";
+  change_count: number;
+  changes: PredictionChange[];
+  summary: string;
+  affects_prediction: false;
+  model_version: string;
+};
+
+export type SnapshotChangesResponse = {
+  game_id: string;
+  snapshot_count: number;
+  current_snapshot: PredictionSnapshot;
+  previous_snapshot?: PredictionSnapshot | null;
+  latest_comparison?: PredictionComparison | null;
+  changed: boolean;
+  significance: "none" | "minor" | "notable" | "major";
+  summary: string;
+  snapshot_store_type: "memory";
+  snapshot_persistence: false;
+  affects_prediction: false;
+};
+
 export type SportPrediction = {
   sport: SportKey;
   game_id: string;

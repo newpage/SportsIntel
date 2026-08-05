@@ -1,13 +1,17 @@
 from __future__ import annotations
 
-from datetime import date
+from datetime import date, datetime, timezone
+import logging
 from typing import Any
 
 from fastapi import HTTPException
 
 from app.sports import SportProvider, sports_registry
+from app.intelligence.prediction_change import build_prediction_snapshot
+from app.intelligence.snapshot_store import nfl_snapshot_store
 
 
+logger = logging.getLogger(__name__)
 
 SPORT_CATALOG: dict[str, dict[str, Any]] = {
     "mlb": {
@@ -110,6 +114,11 @@ def _ensure_provider(sport: str) -> SportProvider:
 def sports_home(sport: str, target_date: date | None = None) -> dict[str, Any]:
     provider = _ensure_provider(sport)
     games = provider.schedule(target_date)
+    captured_at = (
+        datetime.now(timezone.utc)
+        if provider.sport_key.strip().lower() == "nfl"
+        else None
+    )
 
     items = []
     for game in games:
@@ -118,6 +127,22 @@ def sports_home(sport: str, target_date: date | None = None) -> dict[str, Any]:
             "game": game.to_dict(),
             "prediction": prediction.to_dict(),
         })
+        if (
+            captured_at is not None
+            and prediction.pick is not None
+            and prediction.metadata.get("prediction_available") is not False
+        ):
+            try:
+                snapshot = build_prediction_snapshot(
+                    prediction,
+                    captured_at=captured_at,
+                )
+                nfl_snapshot_store.add_snapshot(snapshot)
+            except Exception:
+                logger.exception(
+                    "NFL snapshot capture failed for game_id=%s",
+                    game.game_id,
+                )
 
     return {
         "sport": provider.sport_key,
