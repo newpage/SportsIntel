@@ -89,6 +89,7 @@ class PredictionComparisonRequest(BaseModel):
     def snapshots_match(self) -> PredictionComparisonRequest:
         if self.previous.game_id != self.current.game_id:
             raise ValueError("Prediction snapshots must use the same game_id")
+        _validate_chronology(self.previous, self.current)
         return self
 
 
@@ -112,6 +113,20 @@ def _optional_number(value: Any) -> int | float | None:
     if isinstance(value, (int, float)) and not isinstance(value, bool):
         return value
     return None
+
+
+def _validate_chronology(
+    previous: PredictionSnapshot,
+    current: PredictionSnapshot,
+) -> None:
+    try:
+        chronology_is_valid = current.captured_at > previous.captured_at
+    except TypeError:
+        chronology_is_valid = False
+    if not chronology_is_valid:
+        raise ValueError(
+            "current.captured_at must be later than previous.captured_at"
+        )
 
 
 def build_prediction_snapshot(
@@ -248,6 +263,20 @@ def _difference_meets(
     return abs(float(current) - float(previous)) + 1e-9 >= threshold
 
 
+def _optional_value_explanation(
+    *,
+    label: str,
+    previous: int | float | None,
+    current: int | float | None,
+    movement_explanation: str,
+) -> str:
+    if previous is None and current is not None:
+        return f"{label} became available."
+    if previous is not None and current is None:
+        return f"{label} became unavailable."
+    return movement_explanation
+
+
 def compare_prediction_snapshots(
     previous: PredictionSnapshot,
     current: PredictionSnapshot,
@@ -255,6 +284,7 @@ def compare_prediction_snapshots(
     """Compare two snapshots without changing either prediction."""
     if previous.game_id != current.game_id:
         raise ValueError("Prediction snapshots must use the same game_id")
+    _validate_chronology(previous, current)
 
     changes: list[PredictionChange] = []
 
@@ -372,8 +402,14 @@ def compare_prediction_snapshots(
                     previous=previous_value,
                     current=current_value,
                     significance="minor",
-                    explanation=(
-                        f"{label} moved by at least 10 American-odds points."
+                    explanation=_optional_value_explanation(
+                        label=label,
+                        previous=previous_value,
+                        current=current_value,
+                        movement_explanation=(
+                            f"{label} moved by at least 10 "
+                            "American-odds points."
+                        ),
                     ),
                 )
             )
@@ -390,7 +426,14 @@ def compare_prediction_snapshots(
                 previous=previous.market_pick_probability,
                 current=current.market_pick_probability,
                 significance="minor",
-                explanation="No-vig market probability moved by at least 1 point.",
+                explanation=_optional_value_explanation(
+                    label="No-vig market probability",
+                    previous=previous.market_pick_probability,
+                    current=current.market_pick_probability,
+                    movement_explanation=(
+                        "No-vig market probability moved by at least 1 point."
+                    ),
+                ),
             )
         )
 
@@ -417,10 +460,16 @@ def compare_prediction_snapshots(
                 previous=previous.model_market_edge,
                 current=current.model_market_edge,
                 significance=edge_significance,
-                explanation=(
-                    f"Model-market edge moved {edge_delta * 100:+.1f} points."
-                    if edge_delta is not None
-                    else "Model-market edge availability changed."
+                explanation=_optional_value_explanation(
+                    label="Model-market edge",
+                    previous=previous.model_market_edge,
+                    current=current.model_market_edge,
+                    movement_explanation=(
+                        f"Model-market edge moved "
+                        f"{edge_delta * 100:+.1f} points."
+                        if edge_delta is not None
+                        else "Model-market edge availability changed."
+                    ),
                 ),
             )
         )
