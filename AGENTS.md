@@ -7,3 +7,6 @@
 - Do not change picks, ratings, or displayed confidence unless the sprint explicitly requires it.
 - Follow existing model, provider, UI, and test patterns.
 - Run the backend tests and frontend build before completing work.
+- PR work is not complete until all required CI checks pass. Review failed
+  workflow logs and fix failures on the same branch; never bypass, disable, or
+  weaken a check merely to make CI green.
