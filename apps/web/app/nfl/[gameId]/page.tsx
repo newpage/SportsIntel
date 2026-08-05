@@ -38,6 +38,17 @@ function market(
   );
 }
 
+const QUALIFIED_CONSENSUS_STATUS_LABELS: Record<
+  QualifiedConsensus["status"],
+  string
+> = {
+  qualified: "Qualified",
+  watch: "Watch",
+  caution: "Caution",
+  hold: "Hold",
+  unavailable: "Unavailable",
+};
+
 export default async function NflGamePage({
   params,
 }: {
@@ -152,6 +163,8 @@ export default async function NflGamePage({
     typeof metadata.qualified_consensus === "object"
       ? (metadata.qualified_consensus as QualifiedConsensus)
       : null;
+  const qualifiedConsensusReasons =
+    qualifiedConsensus?.reasons.slice(0, 3) ?? [];
   const predictionWaterfall =
     metadata.prediction_waterfall &&
     typeof metadata.prediction_waterfall === "object"
@@ -394,7 +407,9 @@ export default async function NflGamePage({
           <section className="mlb-detail-grid">
             <div className="market-card">
               <span>Qualified consensus</span>
-              <strong>{qualifiedConsensus.status}</strong>
+              <strong>
+                {QUALIFIED_CONSENSUS_STATUS_LABELS[qualifiedConsensus.status]}
+              </strong>
               <small>Observation only · does not change the prediction</small>
             </div>
             <div className="market-card">
@@ -421,6 +436,17 @@ export default async function NflGamePage({
               <strong>{qualifiedConsensus.market_favorite || "Market unavailable"}</strong>
               <small>{qualifiedConsensus.explanation}</small>
             </div>
+          </section>
+        )}
+
+        {qualifiedConsensusReasons.length > 0 && (
+          <section className="why-section">
+            <div className="eyebrow">Quality considerations</div>
+            <ul className="reason-list clean-reasons">
+              {qualifiedConsensusReasons.map((reason) => (
+                <li key={reason}>{reason}</li>
+              ))}
+            </ul>
           </section>
         )}
 
