@@ -80,6 +80,12 @@ export async function getNflReview() {
   return response.json();
 }
 
+export async function getNflCommandCenter() {
+  const response = await fetch(`${API_URL}/api/sports/nfl/command-center`, { cache: "no-store" });
+  if (!response.ok) throw new Error("Unable to load NFL Command Center");
+  return response.json();
+}
+
 export async function getNflChanges(gameId: string) {
   try {
     const response = await fetch(

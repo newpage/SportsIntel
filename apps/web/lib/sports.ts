@@ -202,3 +202,24 @@ export type NflReviewResponse = {
   snapshot_store_type?: "memory" | "postgres";
   snapshot_persistence?: boolean;
 };
+
+export type CommandCenterGame = {
+  game_id: string; away_team: string; home_team: string; start_time: string;
+  pick?: string | null; market_favorite?: string | null; displayed_confidence?: number | null;
+  model_probability?: number | null; market_probability?: number | null; model_market_edge?: number | null;
+  readiness_label: string; season_phase: string; market_available: boolean; quarterback_available: boolean; qualified_consensus_status: string;
+  qualified_consensus_classification: string; qualified_consensus_quality_score?: number | null; qualified_consensus_quality_label: string;
+  opportunity_score: number; opportunity_label: "Priority" | "Strong" | "Watch" | "Limited";
+  reasons: string[]; affects_prediction: false;
+};
+
+export type NflCommandCenterResponse = {
+  generated_at: string; season_phase: string; game_count: number; market_coverage_count: number;
+  snapshot_history_count: number; data_readiness_summary: Record<string, number>;
+  system_status: { status: "ready" | "degraded" | "empty"; snapshot_history: "available" | "unavailable"; message: string };
+  opportunities: CommandCenterGame[];
+  major_changes: Array<{ game_id: string; matchup: string; significance: "major" | "notable"; summary: string; changes: PredictionChange[]; captured_at: string }>;
+  games_to_avoid: CommandCenterGame[]; market_disagreements: CommandCenterGame[];
+  featured_picks: Record<string, CommandCenterGame | null>; all_games: CommandCenterGame[];
+  affects_prediction: false;
+};
