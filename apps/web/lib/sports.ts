@@ -44,6 +44,22 @@ export type MarketPrediction = {
   metadata?: Record<string, unknown>;
 };
 
+export type QualifiedConsensus = {
+  classification: string;
+  quality_score: number;
+  quality_label: string;
+  status: "qualified" | "watch" | "caution" | "hold" | "unavailable";
+  model_pick: string;
+  market_favorite?: string | null;
+  model_probability: number;
+  no_vig_market_probability?: number | null;
+  model_market_edge?: number | null;
+  explanation: string;
+  reasons: string[];
+  affects_prediction: false;
+  model_version: string;
+};
+
 export type SportPrediction = {
   sport: SportKey;
   game_id: string;

@@ -13,6 +13,7 @@ from app.intelligence import (
     TeamHealthEngine,
     build_consensus_line,
     build_consensus_quality,
+    build_qualified_consensus,
     build_prediction_waterfall,
     build_team_intelligence,
 )
@@ -1028,6 +1029,10 @@ def _moneyline_prediction(game: SportGame) -> SportPrediction:
         quarterbacks_announced=qb_announced,
         season_phase=season_context["season_phase"],
     )
+    qualified_consensus = build_qualified_consensus(
+        consensus=consensus,
+        quality=consensus_quality,
+    )
 
     away_team_intelligence = build_team_intelligence(
         team=game.away_team,
@@ -1376,6 +1381,7 @@ def _moneyline_prediction(game: SportGame) -> SportPrediction:
             "market_affects_prediction": False,
             "consensus": consensus.to_dict(),
             "consensus_quality": consensus_quality.to_dict(),
+            "qualified_consensus": qualified_consensus.to_dict(),
             "consensus_affects_prediction": False,
         },
     )
