@@ -79,3 +79,17 @@ export async function getNflReview() {
 
   return response.json();
 }
+
+export async function getNflChanges(gameId: string) {
+  try {
+    const response = await fetch(
+      `${API_URL}/api/sports/nfl/${encodeURIComponent(gameId)}/changes`,
+      { cache: "no-store" },
+    );
+
+    if (!response.ok) return null;
+    return response.json();
+  } catch {
+    return null;
+  }
+}

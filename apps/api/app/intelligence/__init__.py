@@ -37,6 +37,15 @@ __all__ = [
     "PredictionComparisonRequest",
     "build_prediction_snapshot",
     "compare_prediction_snapshots",
+    "PredictionSnapshotStore",
+    "PredictionSnapshotStoreProtocol",
+    "SnapshotStoreResult",
+    "SnapshotHistoryResponse",
+    "SnapshotChangesResponse",
+    "SnapshotClearGameResponse",
+    "SnapshotClearAllResponse",
+    "SnapshotStoreDiagnostics",
+    "nfl_snapshot_store",
 ]
 
 from app.intelligence.team_health import TeamHealth, TeamHealthEngine
@@ -74,4 +83,16 @@ from app.intelligence.prediction_change import (
     PredictionSnapshot,
     build_prediction_snapshot,
     compare_prediction_snapshots,
+)
+
+from app.intelligence.snapshot_store import (
+    PredictionSnapshotStore,
+    PredictionSnapshotStoreProtocol,
+    SnapshotChangesResponse,
+    SnapshotClearAllResponse,
+    SnapshotClearGameResponse,
+    SnapshotHistoryResponse,
+    SnapshotStoreDiagnostics,
+    SnapshotStoreResult,
+    nfl_snapshot_store,
 )
