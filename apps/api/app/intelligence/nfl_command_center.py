@@ -3,6 +3,7 @@ from __future__ import annotations
 from collections import Counter
 from datetime import datetime, timezone
 from typing import Any, Literal, Mapping
+from urllib.parse import quote
 
 from pydantic import BaseModel, ConfigDict, Field
 
@@ -13,6 +14,7 @@ from app.intelligence.snapshot_store import SnapshotChangesResponse
 class CommandCenterGame(BaseModel):
     model_config = ConfigDict(frozen=True)
     game_id: str
+    detail_url: str
     away_team: str
     home_team: str
     start_time: str
@@ -39,6 +41,7 @@ class CommandCenterGame(BaseModel):
 class CommandCenterChange(BaseModel):
     model_config = ConfigDict(frozen=True)
     game_id: str
+    detail_url: str
     matchup: str
     significance: Literal["major", "notable"]
     summary: str
@@ -89,6 +92,17 @@ def _label(score: int) -> Literal["Priority", "Strong", "Watch", "Limited"]:
     return "Limited"
 
 
+def _detail_url(game_id: str) -> str:
+    return f"/nfl/{quote(game_id, safe='')}"
+
+
+def _quarterback_available(meta: Mapping[str, Any]) -> bool:
+    return (
+        meta.get("qb_announced") is True
+        or meta.get("qb_confirmed") is True
+    )
+
+
 def _opportunity_score(meta: Mapping[str, Any], confidence: float | None) -> int:
     qualified = _mapping(meta.get("qualified_consensus"))
     status_points = {
@@ -102,7 +116,7 @@ def _opportunity_score(meta: Mapping[str, Any], confidence: float | None) -> int
     readiness = str(meta.get("data_readiness_label") or "unknown").lower()
     readiness_points = {"ready": 10, "complete": 10, "developing": 7, "limited": 3}.get(readiness, 4)
     market_points = 5 if meta.get("market_available") is True else 0
-    qb_points = 5 if meta.get("qb_announced") is True else (2 if meta.get("qb_confirmed") is True else 0)
+    qb_points = 5 if _quarterback_available(meta) else 0
     preseason_penalty = 10 if meta.get("season_phase") == "preseason" else 0
     return round(max(0, min(100, status_points + quality + edge_points + confidence_points + readiness_points + market_points + qb_points - preseason_penalty)))
 
@@ -110,8 +124,9 @@ def _opportunity_score(meta: Mapping[str, Any], confidence: float | None) -> int
 def _game_item(item: Mapping[str, Any]) -> CommandCenterGame:
     game = _mapping(item.get("game")); prediction = _mapping(item.get("prediction")); meta = _mapping(prediction.get("metadata")); qualified = _mapping(meta.get("qualified_consensus"))
     score = _opportunity_score(meta, _number(prediction.get("confidence")))
+    game_id = str(game.get("game_id") or game.get("id") or "unknown")
     return CommandCenterGame(
-        game_id=str(game.get("game_id") or game.get("id") or "unknown"),
+        game_id=game_id, detail_url=_detail_url(game_id),
         away_team=str(game.get("away_team") or "Away"), home_team=str(game.get("home_team") or "Home"),
         start_time=str(game.get("start_time") or "TBD"), pick=prediction.get("pick") if isinstance(prediction.get("pick"), str) else None,
         market_favorite=qualified.get("market_favorite") if isinstance(qualified.get("market_favorite"), str) else None,
@@ -119,11 +134,28 @@ def _game_item(item: Mapping[str, Any]) -> CommandCenterGame:
         model_probability=_number(qualified.get("model_probability")), market_probability=_number(qualified.get("no_vig_market_probability")),
         model_market_edge=_number(qualified.get("model_market_edge")), readiness_label=str(meta.get("data_readiness_label") or "unknown"),
         season_phase=str(meta.get("season_phase") or "unknown"), market_available=meta.get("market_available") is True,
-        quarterback_available=meta.get("qb_announced") is True,
+        quarterback_available=_quarterback_available(meta),
         qualified_consensus_status=str(qualified.get("status") or "unavailable"), qualified_consensus_classification=str(qualified.get("classification") or "Unavailable"),
         qualified_consensus_quality_score=int(qualified["quality_score"]) if isinstance(qualified.get("quality_score"), (int, float)) else None,
         qualified_consensus_quality_label=str(qualified.get("quality_label") or "Unavailable"),
         opportunity_score=score, opportunity_label=_label(score), reasons=tuple(str(reason) for reason in qualified.get("reasons", [])[:3]),
+    )
+
+
+def _is_upset_candidate(game: CommandCenterGame) -> bool:
+    return (
+        game.market_available
+        and game.pick is not None
+        and game.market_favorite is not None
+        and game.pick != game.market_favorite
+        and game.qualified_consensus_status.lower() != "hold"
+        and game.readiness_label.lower() not in {"limited", "unknown"}
+        and game.market_probability is not None
+        and game.model_probability is not None
+        and game.model_market_edge is not None
+        and game.displayed_confidence is not None
+        and game.qualified_consensus_quality_score is not None
+        and game.quarterback_available
     )
 
 
@@ -143,7 +175,8 @@ def build_nfl_command_center(
         comparison = result.latest_comparison if result else None
         if comparison and comparison.significance in {"major", "notable"}:
             change_items.append(CommandCenterChange(
-                game_id=game.game_id, matchup=f"{game.away_team} at {game.home_team}", significance=comparison.significance,
+                game_id=game.game_id, detail_url=game.detail_url,
+                matchup=f"{game.away_team} at {game.home_team}", significance=comparison.significance,
                 summary=comparison.summary, changes=tuple(comparison.changes[:3]), captured_at=result.current_snapshot.captured_at,
             ))
     change_items.sort(key=lambda value: (value.significance == "major", value.captured_at), reverse=True)
@@ -155,7 +188,11 @@ def build_nfl_command_center(
         "strongest_qualified": max((game for game in games if game.qualified_consensus_status == "qualified"), key=lambda game: game.opportunity_score, default=None),
         "highest_confidence": max(usable, key=lambda game: game.displayed_confidence or 0, default=None),
         "largest_positive_edge": max((game for game in usable if (game.model_market_edge or 0) > 0), key=lambda game: game.model_market_edge or 0, default=None),
-        "upset_candidate": max((game for game in usable if game.pick and game.market_favorite and game.pick != game.market_favorite and game.market_probability is not None and game.readiness_label.lower() != "limited"), key=lambda game: game.opportunity_score, default=None),
+        "upset_candidate": max(
+            (game for game in usable if _is_upset_candidate(game)),
+            key=lambda game: game.opportunity_score,
+            default=None,
+        ),
     }
     readiness = Counter(game.readiness_label for game in games)
     phases = Counter(str(_mapping(_mapping(item.get("prediction")).get("metadata")).get("season_phase") or "unknown") for item in items if isinstance(item, Mapping))

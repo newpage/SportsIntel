@@ -204,7 +204,7 @@ export type NflReviewResponse = {
 };
 
 export type CommandCenterGame = {
-  game_id: string; away_team: string; home_team: string; start_time: string;
+  game_id: string; detail_url: string; away_team: string; home_team: string; start_time: string;
   pick?: string | null; market_favorite?: string | null; displayed_confidence?: number | null;
   model_probability?: number | null; market_probability?: number | null; model_market_edge?: number | null;
   readiness_label: string; season_phase: string; market_available: boolean; quarterback_available: boolean; qualified_consensus_status: string;
@@ -218,7 +218,7 @@ export type NflCommandCenterResponse = {
   snapshot_history_count: number; data_readiness_summary: Record<string, number>;
   system_status: { status: "ready" | "degraded" | "empty"; snapshot_history: "available" | "unavailable"; message: string };
   opportunities: CommandCenterGame[];
-  major_changes: Array<{ game_id: string; matchup: string; significance: "major" | "notable"; summary: string; changes: PredictionChange[]; captured_at: string }>;
+  major_changes: Array<{ game_id: string; detail_url: string; matchup: string; significance: "major" | "notable"; summary: string; changes: PredictionChange[]; captured_at: string }>;
   games_to_avoid: CommandCenterGame[]; market_disagreements: CommandCenterGame[];
   featured_picks: Record<string, CommandCenterGame | null>; all_games: CommandCenterGame[];
   affects_prediction: false;
