@@ -33,3 +33,40 @@ promotes a signal into prediction behavior.
 classification and quality guardrail into one user-facing decision summary. It
 includes model and no-vig market probabilities, edge, quality, status, reasons,
 and `affects_prediction: false`.
+
+## NFL prediction change detection
+
+Sprint 14.4 adds an observation-only snapshot comparison engine. It does not
+persist snapshots and does not modify the NFL provider or prediction pipeline.
+
+`PredictionSnapshot` captures the game, timestamp, pick, model probability,
+displayed and raw confidence, confidence cap, readiness, season phase,
+quarterback statuses, moneylines, no-vig market probability, model-market edge,
+qualified-consensus status/classification/quality, and model version.
+
+`PredictionComparison` reports whether meaningful changes were detected, the
+highest significance (`none`, `minor`, `notable`, or `major`), a structured
+list of changes, and `affects_prediction: false`. Each change contains its
+field, label, previous/current values, direction, significance, and explanation.
+
+The development diagnostic route accepts two validated snapshot payloads:
+
+```http
+POST /api/sports/nfl/compare
+Content-Type: application/json
+
+{
+  "previous": { "game_id": "nfl-123", "...": "complete snapshot" },
+  "current": { "game_id": "nfl-123", "...": "complete snapshot" }
+}
+```
+
+Major changes include a changed pick, qualified consensus moving to or from
+Hold, and a quarterback downgrade from expected/confirmed to
+out/inactive/doubtful. Notable changes include confidence movement of at least
+three points, model-market edge movement of at least five percentage points,
+classification changes, and readiness changes. Other threshold-qualified
+changes are minor; no meaningful changes produce `none`.
+
+The comparison contract is diagnostic only: picks, model probabilities,
+displayed confidence, ratings, and consensus calculations remain unchanged.

@@ -31,6 +31,12 @@ __all__ = [
     "build_consensus_quality",
     "QualifiedConsensus",
     "build_qualified_consensus",
+    "PredictionSnapshot",
+    "PredictionChange",
+    "PredictionComparison",
+    "PredictionComparisonRequest",
+    "build_prediction_snapshot",
+    "compare_prediction_snapshots",
 ]
 
 from app.intelligence.team_health import TeamHealth, TeamHealthEngine
@@ -59,4 +65,13 @@ from app.intelligence.consensus_quality import (
 from app.intelligence.qualified_consensus import (
     QualifiedConsensus,
     build_qualified_consensus,
+)
+
+from app.intelligence.prediction_change import (
+    PredictionChange,
+    PredictionComparison,
+    PredictionComparisonRequest,
+    PredictionSnapshot,
+    build_prediction_snapshot,
+    compare_prediction_snapshots,
 )
