@@ -191,6 +191,7 @@ jobs:
 
       - name: Verify persistent snapshot-store health
         run: |
+          python -c 'import json; data=json.load(open("/tmp/api-health.json")); assert data["application"]["status"] == "healthy"; assert data["postgresql"]["configured"] is True; assert data["version"]; assert data["environment"] == "development"'
           curl --fail --silent --show-error \
             http://127.0.0.1:8300/api/sports/nfl/snapshot-store/health \
             > /tmp/snapshot-store-health.json

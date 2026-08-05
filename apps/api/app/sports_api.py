@@ -138,10 +138,12 @@ def sports_home(sport: str, target_date: date | None = None) -> dict[str, Any]:
                     captured_at=captured_at,
                 )
                 nfl_snapshot_store.add_snapshot(snapshot)
-            except Exception:
-                logger.exception(
-                    "NFL snapshot capture failed for game_id=%s",
+            except Exception as exc:
+                logger.error(
+                    "NFL snapshot capture failed for game_id=%s "
+                    "error_type=%s",
                     game.game_id,
+                    type(exc).__name__,
                 )
 
     return {

@@ -654,7 +654,7 @@ class PostgresPredictionSnapshotStore:
         try:
             connection = self._connect()
         except Exception:
-            logger.exception("PostgreSQL snapshot-store connection check failed")
+            logger.error("PostgreSQL snapshot-store connection check failed")
             return SnapshotStoreHealth(
                 snapshot_store_type="postgres",
                 snapshot_persistence=True,
@@ -681,7 +681,7 @@ class PostgresPredictionSnapshotStore:
                 last_successful_snapshot_write_time=row["last_write"],
             )
         except Exception:
-            logger.exception("PostgreSQL snapshot table health check failed")
+            logger.error("PostgreSQL snapshot table health check failed")
             return SnapshotStoreHealth(
                 snapshot_store_type="postgres",
                 snapshot_persistence=True,

@@ -1,10 +1,12 @@
 from contextlib import asynccontextmanager
 import logging
 
-from fastapi import FastAPI, HTTPException, Query
+from fastapi import Depends, FastAPI, HTTPException, Query, Request, Response
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.engine import all_predictions
+from app.auth import require_admin_api_key
+from app.configuration import Settings
 from app.news import fetch_yahoo_nfl_news
 from app.mlb import mlb_game, mlb_home, mlb_results
 from app.intelligence.nfl_review import build_nfl_review
@@ -27,12 +29,15 @@ from app.sports_api import (
     sports_catalog,
     sports_home,
 )
+from app.operations import FixedWindowRateLimiter, OperationalMiddleware
 
 logger = logging.getLogger("uvicorn.error")
+settings = Settings.from_environment()
 
 
 @asynccontextmanager
 async def lifespan(_app: FastAPI):
+    active_settings: Settings = _app.state.settings
     store_health = nfl_snapshot_store.health()
     logger.info(
         "NFL snapshot store initialized: type=%s persistence=%s "
@@ -42,25 +47,71 @@ async def lifespan(_app: FastAPI):
         store_health.database_reachable,
         store_health.snapshot_table_reachable,
     )
+    logger.info(
+        "SportsIntel startup: environment=%s version=%s cors_origins=%s "
+        "public_rate_limit=%s admin_rate_limit=%s",
+        active_settings.environment,
+        active_settings.version,
+        len(active_settings.cors_origins),
+        active_settings.public_rate_limit,
+        active_settings.admin_rate_limit,
+    )
     yield
 
 
-app = FastAPI(title="SportsIntel API", version="0.2.0", lifespan=lifespan)
+app = FastAPI(
+    title="SportsIntel API",
+    version=settings.version,
+    lifespan=lifespan,
+)
+app.state.settings = settings
+app.state.rate_limiter = FixedWindowRateLimiter()
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:3300"],
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
+    allow_origins=list(settings.cors_origins),
+    allow_credentials=False,
+    allow_methods=["GET", "POST", "DELETE", "OPTIONS"],
+    allow_headers=["Accept", "Content-Type", "X-Admin-Key", "X-Request-ID"],
 )
+app.add_middleware(OperationalMiddleware)
 
 
 @app.get("/health")
-def health():
+def health(request: Request, response: Response):
+    active_settings: Settings = request.app.state.settings
+    store_health = nfl_snapshot_store.health()
+    postgres_reachable = (
+        store_health.database_reachable
+        if store_health.snapshot_store_type == "postgres"
+        else None
+    )
+    application_status = (
+        "healthy"
+        if not active_settings.production
+        or (
+            store_health.snapshot_persistence
+            and store_health.database_reachable
+            and store_health.snapshot_table_reachable
+        )
+        else "degraded"
+    )
+    if application_status == "degraded":
+        response.status_code = 503
     return {
-        "status": "healthy",
-        "service": "SportsIntel API",
-        "nfl_snapshot_store": nfl_snapshot_store.health().model_dump(),
+        "status": application_status,
+        "application": {
+            "name": "SportsIntel API",
+            "status": application_status,
+        },
+        "postgresql": {
+            "configured": active_settings.database_url_configured,
+            "reachable": postgres_reachable,
+        },
+        "snapshot_store": store_health.model_dump(),
+        "version": active_settings.version,
+        "build_timestamp": active_settings.build_timestamp,
+        "git_commit": active_settings.git_commit,
+        "environment": active_settings.environment,
     }
 
 
@@ -134,6 +185,7 @@ def compare_nfl_predictions(
 @app.post(
     "/api/sports/nfl/history/clear",
     response_model=SnapshotClearAllResponse,
+    dependencies=[Depends(require_admin_api_key)],
 )
 def clear_nfl_snapshot_history() -> SnapshotClearAllResponse:
     try:
@@ -189,6 +241,7 @@ def nfl_snapshot_changes(game_id: str) -> SnapshotChangesResponse:
 @app.delete(
     "/api/sports/nfl/{game_id}/history",
     response_model=SnapshotClearGameResponse,
+    dependencies=[Depends(require_admin_api_key)],
 )
 def clear_nfl_game_snapshot_history(
     game_id: str,
