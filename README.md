@@ -81,8 +81,8 @@ History is memory-only:
 
 - At most 20 snapshots are retained per game.
 - History is returned newest first.
-- A snapshot is deduplicated when all comparison-relevant fields except
-  `captured_at` match an existing stored version.
+- A snapshot is deduplicated when it is equivalent to the immediately previous
+  stored snapshot, excluding `captured_at`.
 - Capture failures are logged and never fail the NFL response.
 - All history disappears whenever the API process restarts.
 - The store implements an isolated interface so persistent storage can replace

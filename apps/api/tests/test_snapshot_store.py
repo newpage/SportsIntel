@@ -25,6 +25,7 @@ def _snapshot(
     away_moneyline: float | None = 120,
     displayed_confidence: int = 60,
     pick: str = "Arizona Cardinals",
+    qualified_consensus_status: str = "watch",
 ) -> PredictionSnapshot:
     return PredictionSnapshot(
         game_id=game_id,
@@ -42,7 +43,7 @@ def _snapshot(
         home_moneyline=-110,
         market_pick_probability=0.52,
         model_market_edge=0.10,
-        qualified_consensus_status="watch",
+        qualified_consensus_status=qualified_consensus_status,
         qualified_consensus_classification="Strong value",
         qualified_consensus_quality_score=65,
         model_version="nfl-provisional-ratings-v1",
@@ -117,7 +118,7 @@ def test_first_snapshot_is_stored() -> None:
     assert result.affects_prediction is False
 
 
-def test_equivalent_snapshot_is_deduplicated() -> None:
+def test_consecutive_equivalent_snapshots_are_deduplicated() -> None:
     store = PredictionSnapshotStore()
     store.add_snapshot(_snapshot())
 
@@ -125,6 +126,49 @@ def test_equivalent_snapshot_is_deduplicated() -> None:
 
     assert result.stored is False
     assert result.snapshot_count == 1
+
+
+def test_state_reversion_stores_all_versions_and_final_state() -> None:
+    store = PredictionSnapshotStore()
+    store.add_snapshot(_snapshot(minute=0, qualified_consensus_status="watch"))
+    store.add_snapshot(_snapshot(minute=1, qualified_consensus_status="hold"))
+
+    result = store.add_snapshot(
+        _snapshot(minute=2, qualified_consensus_status="watch")
+    )
+    history = store.get_history("nfl-123", 10)
+
+    assert result.stored is True
+    assert result.snapshot_count == 3
+    assert [item.qualified_consensus_status for item in history] == [
+        "watch",
+        "hold",
+        "watch",
+    ]
+    assert store.get_latest("nfl-123") == history[0]
+
+
+def test_state_reversion_compares_previous_state_and_is_major() -> None:
+    store = PredictionSnapshotStore()
+    store.add_snapshot(_snapshot(minute=0, qualified_consensus_status="watch"))
+    hold = _snapshot(minute=1, qualified_consensus_status="hold")
+    final_watch = _snapshot(minute=2, qualified_consensus_status="watch")
+    store.add_snapshot(hold)
+    store.add_snapshot(final_watch)
+
+    result = store.get_latest_comparison("nfl-123")
+
+    assert store.get_previous("nfl-123") == hold
+    assert store.get_latest("nfl-123") == final_watch
+    assert result is not None
+    assert result.significance == "major"
+    assert any(
+        change.field == "qualified_consensus_status"
+        and change.previous_value == "hold"
+        and change.current_value == "watch"
+        and change.significance == "major"
+        for change in result.changes
+    )
 
 
 def test_changed_snapshot_is_appended() -> None:
@@ -151,6 +195,26 @@ def test_store_retains_latest_twenty_snapshots() -> None:
     assert len(history) == 20
     assert history[0].captured_at == CAPTURED_AT + timedelta(minutes=24)
     assert history[-1].captured_at == CAPTURED_AT + timedelta(minutes=5)
+
+
+def test_store_retention_still_works_after_state_reversions() -> None:
+    store = PredictionSnapshotStore()
+    for minute in range(25):
+        status = "watch" if minute % 2 == 0 else "hold"
+        store.add_snapshot(
+            _snapshot(
+                minute=minute,
+                qualified_consensus_status=status,
+            )
+        )
+
+    history = store.get_history("nfl-123", 20)
+
+    assert len(history) == 20
+    assert history[0].captured_at == CAPTURED_AT + timedelta(minutes=24)
+    assert history[0].qualified_consensus_status == "watch"
+    assert history[-1].captured_at == CAPTURED_AT + timedelta(minutes=5)
+    assert history[-1].qualified_consensus_status == "hold"
 
 
 def test_history_is_chronological_and_newest_first() -> None:
@@ -215,6 +279,19 @@ def test_concurrent_insertion_is_thread_safe() -> None:
     assert len(history) == 20
     assert history[0].captured_at == CAPTURED_AT + timedelta(minutes=39)
     assert history[-1].captured_at == CAPTURED_AT + timedelta(minutes=20)
+
+
+def test_concurrent_equivalent_insertion_is_deduplicated() -> None:
+    store = PredictionSnapshotStore()
+    snapshots = [_snapshot(minute=minute) for minute in range(40)]
+
+    with ThreadPoolExecutor(max_workers=8) as executor:
+        list(executor.map(store.add_snapshot, snapshots))
+
+    history = store.get_history("nfl-123", 20)
+
+    assert len(history) == 1
+    assert store.get_snapshot_count("nfl-123") == 1
 
 
 def test_nfl_endpoint_automatically_captures_shared_timestamp(

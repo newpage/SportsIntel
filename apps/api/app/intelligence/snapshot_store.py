@@ -150,7 +150,7 @@ class PredictionSnapshotStore:
     def add_snapshot(self, snapshot: PredictionSnapshot) -> SnapshotStoreResult:
         with self._lock:
             history = self._history.setdefault(snapshot.game_id, [])
-            if any(_equivalent(existing, snapshot) for existing in history):
+            if history and _equivalent(history[-1], snapshot):
                 current = history[-1]
                 previous = history[-2] if len(history) > 1 else None
                 return SnapshotStoreResult(
