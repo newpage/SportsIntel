@@ -5,6 +5,11 @@ from app.engine import all_predictions
 from app.news import fetch_yahoo_nfl_news
 from app.mlb import mlb_game, mlb_home, mlb_results
 from app.intelligence.nfl_review import build_nfl_review
+from app.intelligence.prediction_change import (
+    PredictionComparison,
+    PredictionComparisonRequest,
+    compare_prediction_snapshots,
+)
 from app.sports_api import (
     sport_capabilities,
     sports_catalog,
@@ -61,6 +66,16 @@ def sport_home(sport: str):
 @app.get("/api/sports/nfl/review")
 def nfl_review():
     return build_nfl_review(sports_home("nfl"))
+
+
+@app.post(
+    "/api/sports/nfl/compare",
+    response_model=PredictionComparison,
+)
+def compare_nfl_predictions(
+    request: PredictionComparisonRequest,
+) -> PredictionComparison:
+    return compare_prediction_snapshots(request.previous, request.current)
 
 
 @app.get("/api/mlb")
