@@ -207,3 +207,5 @@ The manually operated private-preview package is documented in
 `docker-compose.production.yml`, Apache Basic Authentication, immutable Git refs,
 restricted PostgreSQL backups, health timers, and recorded rollback metadata. No
 CI workflow or repository script deploys to an external server automatically.
+Production SSR uses `SPORTSINTEL_INTERNAL_API_URL=http://api:8000`; browser API
+traffic uses the same-origin `NEXT_PUBLIC_API_URL=/api` route through Apache.

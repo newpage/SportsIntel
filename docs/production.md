@@ -38,7 +38,8 @@ the snapshot store is not PostgreSQL.
 | --- | --- | --- |
 | `API_PORT` | Yes | Loopback host port published for FastAPI. |
 | `WEB_PORT` | Yes | Loopback host port published for Next.js. |
-| `NEXT_PUBLIC_API_URL` | Yes | Public HTTPS API origin used by the web build/runtime. |
+| `SPORTSINTEL_INTERNAL_API_URL` | Yes | Server-only API origin. Use `http://api:8000` inside production Compose. |
+| `NEXT_PUBLIC_API_URL` | Yes | Browser-visible same-origin API prefix. Use `/api`; never put an internal hostname here. |
 | `SPORTSINTEL_ENV` | Yes | Must be `production` for production validation and HSTS. |
 | `SPORTSINTEL_VERSION` | Yes | Release version returned by `/health`. |
 | `SPORTSINTEL_BUILD_TIMESTAMP` | Yes | Timezone-aware ISO-8601 build/deploy timestamp. |

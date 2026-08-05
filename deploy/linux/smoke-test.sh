@@ -7,10 +7,13 @@ mode="${1:---external}"
 api="http://127.0.0.1:${API_PORT:-8300}"; web="http://127.0.0.1:${WEB_PORT:-3300}"
 if [[ "$mode" == "--external" ]]; then
   [[ -n "${SPORTSINTEL_PUBLIC_URL:-}" ]] || { echo "SPORTSINTEL_PUBLIC_URL is required for external smoke tests" >&2; exit 2; }
-  code="$(curl --silent --output /dev/null --write-out '%{http_code}' "${SPORTSINTEL_PUBLIC_URL}/")"
+  external_curl=(--silent --show-error --max-time 30)
+  [[ "${SPORTSINTEL_SMOKE_INSECURE:-false}" == "true" ]] && external_curl+=(--insecure)
+  code="$(curl "${external_curl[@]}" --output /dev/null --write-out '%{http_code}' "${SPORTSINTEL_PUBLIC_URL}/")"
   [[ "$code" == "401" ]] || { echo "Preview authentication is not enforced (expected 401, got $code)" >&2; exit 1; }
   [[ -n "${SPORTSINTEL_PREVIEW_USER:-}" && -n "${SPORTSINTEL_PREVIEW_PASSWORD:-}" ]] || { echo "Preview credentials are required for authenticated smoke tests" >&2; exit 2; }
-  curl --fail --silent --show-error --user "${SPORTSINTEL_PREVIEW_USER}:${SPORTSINTEL_PREVIEW_PASSWORD}" "${SPORTSINTEL_PUBLIC_URL}/" >/dev/null
+  page="$(curl "${external_curl[@]}" --fail --user "${SPORTSINTEL_PREVIEW_USER}:${SPORTSINTEL_PREVIEW_PASSWORD}" "${SPORTSINTEL_PUBLIC_URL}/")"
+  [[ "$page" == *"NFL Command Center"* ]] || { echo "Authenticated SSR Command Center content was not rendered" >&2; exit 1; }
 fi
 wait_url API "$api/health"
 wait_url Web "$web/"

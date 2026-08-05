@@ -52,6 +52,10 @@ the admin API key separate from Basic Auth. `DATABASE_URL` must match the
 PostgreSQL variables. Never commit the environment file or expose it in logs.
 The deployment script generates commit, version, build time, and production mode
 in `/opt/sportsintel/shared/release.env`; operators do not edit those values.
+`SPORTSINTEL_INTERNAL_API_URL=http://api:8000` is consumed only by Next.js server
+components on the private application network. `NEXT_PUBLIC_API_URL=/api` is the
+browser-safe same-origin prefix routed by Apache. Never expose `api:8000` through
+a `NEXT_PUBLIC_*` variable or substitute it into client bundles.
 
 ## Apache, authentication, and HTTPS
 
@@ -98,6 +102,11 @@ read -rs SPORTSINTEL_PREVIEW_PASSWORD; export SPORTSINTEL_PREVIEW_PASSWORD
 deploy/linux/smoke-test.sh --external
 unset SPORTSINTEL_PREVIEW_PASSWORD
 ```
+
+External smoke testing first requires an unauthenticated `401`, then verifies
+that authenticated HTTPS returns server-rendered NFL Command Center content.
+`SPORTSINTEL_SMOKE_INSECURE=true` exists only for disposable self-signed local/CI
+rehearsals and must not be used for the real preview certificate.
 
 ## Status, monitoring, and logs
 

@@ -15,6 +15,12 @@ if grep -A20 '^  postgres:' "$root/docker-compose.production.yml" | grep -q 'por
 fi
 grep -q 'AuthType Basic' "$root/deploy/apache/sportsintel.conf.example"
 grep -q 'Redirect permanent / https://' "$root/deploy/apache/sportsintel.conf.example"
+grep -q 'SPORTSINTEL_INTERNAL_API_URL.*http://api:8000' "$root/docker-compose.production.yml"
+grep -q 'NEXT_PUBLIC_API_URL.*-/api' "$root/docker-compose.production.yml"
+grep -q 'import "server-only"' "$root/apps/web/lib/api.ts"
+if grep -q 'NEXT_PUBLIC_API_URL' "$root/apps/web/lib/api.ts"; then
+  echo "Server API module reads the browser API setting" >&2; exit 1
+fi
 grep -q 'pg_dump.*--format=custom' "$root/deploy/linux/backup.sh"
 grep -q '%Y%m%dT%H%M%SZ' "$root/deploy/linux/backup.sh"
 grep -q 'sportsintel-.*\.dump' "$root/deploy/linux/backup.sh"
