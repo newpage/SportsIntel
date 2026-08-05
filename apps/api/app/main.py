@@ -1,3 +1,6 @@
+from contextlib import asynccontextmanager
+import logging
+
 from fastapi import FastAPI, HTTPException, Query
 from fastapi.middleware.cors import CORSMiddleware
 
@@ -15,6 +18,8 @@ from app.intelligence.snapshot_store import (
     SnapshotClearAllResponse,
     SnapshotClearGameResponse,
     SnapshotHistoryResponse,
+    SnapshotStoreHealth,
+    SnapshotStoreUnavailable,
     nfl_snapshot_store,
 )
 from app.sports_api import (
@@ -23,7 +28,24 @@ from app.sports_api import (
     sports_home,
 )
 
-app = FastAPI(title="SportsIntel API", version="0.2.0")
+logger = logging.getLogger("uvicorn.error")
+
+
+@asynccontextmanager
+async def lifespan(_app: FastAPI):
+    store_health = nfl_snapshot_store.health()
+    logger.info(
+        "NFL snapshot store initialized: type=%s persistence=%s "
+        "database_reachable=%s table_reachable=%s",
+        store_health.snapshot_store_type,
+        store_health.snapshot_persistence,
+        store_health.database_reachable,
+        store_health.snapshot_table_reachable,
+    )
+    yield
+
+
+app = FastAPI(title="SportsIntel API", version="0.2.0", lifespan=lifespan)
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["http://localhost:3300"],
@@ -35,7 +57,26 @@ app.add_middleware(
 
 @app.get("/health")
 def health():
-    return {"status": "healthy", "service": "SportsIntel API"}
+    return {
+        "status": "healthy",
+        "service": "SportsIntel API",
+        "nfl_snapshot_store": nfl_snapshot_store.health().model_dump(),
+    }
+
+
+@app.get(
+    "/api/sports/nfl/snapshot-store/health",
+    response_model=SnapshotStoreHealth,
+)
+def nfl_snapshot_store_health() -> SnapshotStoreHealth:
+    return nfl_snapshot_store.health()
+
+
+def _snapshot_service_unavailable() -> HTTPException:
+    return HTTPException(
+        status_code=503,
+        detail="NFL snapshot history service is unavailable",
+    )
 
 
 @app.get("/api/home")
@@ -73,7 +114,10 @@ def sport_home(sport: str):
 @app.get("/api/sports/nfl/review")
 def nfl_review():
     review = build_nfl_review(sports_home("nfl"))
-    review.update(nfl_snapshot_store.diagnostics().model_dump())
+    try:
+        review.update(nfl_snapshot_store.diagnostics().model_dump())
+    except SnapshotStoreUnavailable as exc:
+        raise _snapshot_service_unavailable() from exc
     return review
 
 
@@ -92,7 +136,10 @@ def compare_nfl_predictions(
     response_model=SnapshotClearAllResponse,
 )
 def clear_nfl_snapshot_history() -> SnapshotClearAllResponse:
-    return nfl_snapshot_store.clear_all()
+    try:
+        return nfl_snapshot_store.clear_all()
+    except SnapshotStoreUnavailable as exc:
+        raise _snapshot_service_unavailable() from exc
 
 
 @app.get(
@@ -103,7 +150,11 @@ def nfl_snapshot_history(
     game_id: str,
     limit: int = Query(default=10, ge=1, le=20),
 ) -> SnapshotHistoryResponse:
-    snapshots = nfl_snapshot_store.get_history(game_id, limit)
+    try:
+        snapshots = nfl_snapshot_store.get_history(game_id, limit)
+        snapshot_count = nfl_snapshot_store.get_snapshot_count(game_id)
+    except SnapshotStoreUnavailable as exc:
+        raise _snapshot_service_unavailable() from exc
     if not snapshots:
         raise HTTPException(
             status_code=404,
@@ -111,8 +162,10 @@ def nfl_snapshot_history(
         )
     return SnapshotHistoryResponse(
         game_id=game_id,
-        snapshot_count=nfl_snapshot_store.get_snapshot_count(game_id),
+        snapshot_count=snapshot_count,
         snapshots=snapshots,
+        snapshot_store_type=nfl_snapshot_store.store_type,
+        snapshot_persistence=nfl_snapshot_store.persistence_enabled,
     )
 
 
@@ -121,7 +174,10 @@ def nfl_snapshot_history(
     response_model=SnapshotChangesResponse,
 )
 def nfl_snapshot_changes(game_id: str) -> SnapshotChangesResponse:
-    result = nfl_snapshot_store.get_changes(game_id)
+    try:
+        result = nfl_snapshot_store.get_changes(game_id)
+    except SnapshotStoreUnavailable as exc:
+        raise _snapshot_service_unavailable() from exc
     if result is None:
         raise HTTPException(
             status_code=404,
@@ -137,10 +193,13 @@ def nfl_snapshot_changes(game_id: str) -> SnapshotChangesResponse:
 def clear_nfl_game_snapshot_history(
     game_id: str,
 ) -> SnapshotClearGameResponse:
-    return SnapshotClearGameResponse(
-        game_id=game_id,
-        removed_snapshots=nfl_snapshot_store.clear_game(game_id),
-    )
+    try:
+        return SnapshotClearGameResponse(
+            game_id=game_id,
+            removed_snapshots=nfl_snapshot_store.clear_game(game_id),
+        )
+    except SnapshotStoreUnavailable as exc:
+        raise _snapshot_service_unavailable() from exc
 
 
 @app.get("/api/mlb")

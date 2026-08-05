@@ -73,20 +73,34 @@ displayed confidence, ratings, and consensus calculations remain unchanged.
 
 ## NFL automatic snapshot history
 
-The NFL sports endpoint automatically captures each available prediction into a
-thread-safe, process-local `PredictionSnapshotStore`. One timezone-aware UTC
-timestamp is shared by every game generated in the same response.
+The NFL sports endpoint automatically captures each available prediction through
+the existing snapshot-store interface. One timezone-aware UTC timestamp is
+shared by every game generated in the same response. PostgreSQL is selected when
+`DATABASE_URL` is configured; memory is selected when no database is configured
+or when `NFL_SNAPSHOT_STORE=memory` is explicit. Set
+`NFL_SNAPSHOT_STORE=postgres` to require durable storage. PostgreSQL failures do
+not silently switch the running process to memory.
 
-History is memory-only:
+Storage semantics:
 
 - At most 20 snapshots are retained per game.
 - History is returned newest first.
 - A snapshot is deduplicated when it is equivalent to the immediately previous
   stored snapshot, excluding `captured_at`.
 - Capture failures are logged and never fail the NFL response.
-- All history disappears whenever the API process restarts.
-- The store implements an isolated interface so persistent storage can replace
-  it in a future sprint.
+- PostgreSQL history survives API and container restarts; memory history does
+  not survive an API process restart.
+- PostgreSQL uses a per-game advisory transaction lock so concurrent equivalent
+  writes deduplicate and retention pruning is atomic with insertion.
+- A → B → A reversions remain three stored versions.
+
+The structured schema is defined in
+`db/init/001_nfl_prediction_snapshots.sql`. Docker Compose applies it
+automatically when creating a new PostgreSQL data volume. Existing deployments
+must apply the idempotent file before setting `NFL_SNAPSHOT_STORE=postgres`, for
+example with `psql "$DATABASE_URL" -f db/init/001_nfl_prediction_snapshots.sql`.
+Memory-only history is intentionally not migrated because it has no durable
+source; persistence begins with the first PostgreSQL-backed capture.
 
 Diagnostic endpoints:
 
@@ -94,7 +108,9 @@ Diagnostic endpoints:
 - `GET /api/sports/nfl/{game_id}/changes` returns the latest comparison, or a
   typed “No prior snapshot” response when only one version exists.
 - `DELETE /api/sports/nfl/{game_id}/history` clears one game.
-- `POST /api/sports/nfl/history/clear` clears the entire in-memory store.
+- `POST /api/sports/nfl/history/clear` clears the configured store.
+- `GET /api/sports/nfl/snapshot-store/health` reports store type, persistence,
+  database/table reachability, retained row count, and last successful write.
 
 Snapshot diagnostics are also included in `GET /api/sports/nfl/review`,
 including coverage, multiple-version counts, meaningful changes, major/notable
@@ -103,3 +119,9 @@ change counts, store type, and persistence status.
 Snapshot history and all related endpoints remain observation-only and return
 `affects_prediction: false` where applicable. They do not change picks,
 probabilities, confidence, ratings, consensus, providers, or scheduling.
+
+Back up `nfl_prediction_snapshots` with the same PostgreSQL backup policy used
+for the application database. The clear endpoints are administrative diagnostics
+and must be protected by authentication before public deployment. Credentials
+and connection strings are never returned by health or history responses, and
+database errors are reduced to a generic 503 response for API clients.

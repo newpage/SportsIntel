@@ -111,8 +111,8 @@ export type SnapshotChangesResponse = {
   changed: boolean;
   significance: "none" | "minor" | "notable" | "major";
   summary: string;
-  snapshot_store_type: "memory";
-  snapshot_persistence: false;
+  snapshot_store_type: "memory" | "postgres";
+  snapshot_persistence: boolean;
   affects_prediction: false;
 };
 
@@ -194,4 +194,11 @@ export type NflReviewResponse = {
   };
   prediction_impact: Record<string, boolean>;
   status: "ready_for_review" | "partial" | string;
+  games_with_snapshot_history?: number;
+  games_with_multiple_snapshots?: number;
+  games_with_meaningful_changes?: number;
+  major_change_count?: number;
+  notable_change_count?: number;
+  snapshot_store_type?: "memory" | "postgres";
+  snapshot_persistence?: boolean;
 };
