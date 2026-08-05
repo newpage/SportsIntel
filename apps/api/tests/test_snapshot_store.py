@@ -1,4 +1,5 @@
 from concurrent.futures import ThreadPoolExecutor
+from dataclasses import replace
 from datetime import datetime, timedelta, timezone
 import logging
 
@@ -352,7 +353,7 @@ def test_snapshot_failure_does_not_break_nfl_response(
 
     assert response.status_code == 200
     assert "game_id=nfl-auto-0" in caplog.text
-    assert "capture failed" in caplog.text
+    assert "error_type=ValueError" in caplog.text
 
 
 def test_database_snapshot_failure_does_not_break_nfl_response(
@@ -377,7 +378,7 @@ def test_database_snapshot_failure_does_not_break_nfl_response(
 
     assert response.status_code == 200
     assert "game_id=nfl-auto-0" in caplog.text
-    assert "database unavailable" in caplog.text
+    assert "error_type=SnapshotStoreUnavailable" in caplog.text
 
 
 def test_history_endpoint_and_invalid_limit() -> None:
@@ -452,9 +453,19 @@ def test_clear_endpoints() -> None:
     nfl_snapshot_store.add_snapshot(_snapshot(game_id="nfl-1"))
     nfl_snapshot_store.add_snapshot(_snapshot(game_id="nfl-2"))
     client = TestClient(app)
+    admin_key = "test-admin-key"
+    app.state.settings = replace(
+        app.state.settings,
+        admin_key=admin_key,
+    )
+    headers = {"X-Admin-Key": admin_key}
 
-    per_game = client.delete("/api/sports/nfl/nfl-1/history")
-    clear_all = client.post("/api/sports/nfl/history/clear")
+    per_game = client.delete(
+        "/api/sports/nfl/nfl-1/history", headers=headers
+    )
+    clear_all = client.post(
+        "/api/sports/nfl/history/clear", headers=headers
+    )
 
     assert per_game.status_code == 200
     assert per_game.json()["removed_snapshots"] == 1

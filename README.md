@@ -166,3 +166,22 @@ locally. For Docker failures, inspect the automatically collected Compose logs.
 Use GitHub’s **Re-run failed jobs** action after pushing a fix, or
 **Run workflow** for a manual validation. Fix failures on the same PR branch;
 do not bypass or weaken checks to obtain a green run.
+
+## Production security and operations
+
+SportsIntel supports configuration-driven CORS, production-only HSTS, baseline
+security headers, per-IP public/admin rate limits, request IDs, structured access
+logs, and an `X-Admin-Key` guard on destructive snapshot-history routes.
+Production startup validates PostgreSQL persistence, HTTPS CORS origins, build
+metadata, and a non-placeholder admin key before serving traffic.
+
+The enriched `/health` response reports application status, PostgreSQL and
+snapshot-store reachability, version, UTC build timestamp, Git commit, and
+environment without returning credentials. Docker services run as non-root where
+applicable and include healthchecks, restart policies, and graceful shutdown
+windows.
+
+See [the production deployment guide](docs/production.md) for Linux setup,
+Apache/HTTPS configuration, firewall rules, every environment variable,
+backup/restore, rollback, monitoring, and log handling. Start from
+`production.env.example`; never deploy its placeholder values.
