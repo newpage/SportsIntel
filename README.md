@@ -126,6 +126,22 @@ and must be protected by authentication before public deployment. Credentials
 and connection strings are never returned by health or history responses, and
 database errors are reduced to a generic 503 response for API clients.
 
+## NFL Command Center
+
+`GET /api/sports/nfl/command-center` aggregates the current NFL slate, qualified
+consensus, market context, readiness, and the latest bounded snapshot comparisons
+into one observation-only response. The root web page uses this single endpoint.
+If snapshot history is unavailable, current game intelligence remains available
+and `system_status` reports the degraded dependency.
+
+Opportunity scores are deterministic and range from 0–100: consensus status
+(25 points), consensus quality (20), positive model-market edge (20), displayed
+confidence (15), data readiness (10), market availability (5), and quarterback
+availability (5), with a 10-point preseason uncertainty penalty. Labels are
+`Priority` at 80+, `Strong` at 65+, `Watch` at 50+, and `Limited` below 50.
+These rankings do not change picks, probabilities, confidence, ratings, or any
+provider calculation; every result includes `affects_prediction: false`.
+
 ## Continuous integration
 
 `.github/workflows/ci.yml` runs for pull requests targeting `main`, pushes to

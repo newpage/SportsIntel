@@ -10,6 +10,10 @@ from app.configuration import Settings
 from app.news import fetch_yahoo_nfl_news
 from app.mlb import mlb_game, mlb_home, mlb_results
 from app.intelligence.nfl_review import build_nfl_review
+from app.intelligence.nfl_command_center import (
+    NflCommandCenterResponse,
+    build_nfl_command_center,
+)
 from app.intelligence.prediction_change import (
     PredictionComparison,
     PredictionComparisonRequest,
@@ -170,6 +174,30 @@ def nfl_review():
     except SnapshotStoreUnavailable as exc:
         raise _snapshot_service_unavailable() from exc
     return review
+
+
+@app.get(
+    "/api/sports/nfl/command-center",
+    response_model=NflCommandCenterResponse,
+)
+def nfl_command_center() -> NflCommandCenterResponse:
+    home_payload = sports_home("nfl")
+    games = home_payload.get("games", [])
+    game_ids = tuple(
+        str(item.get("game", {}).get("game_id"))
+        for item in games
+        if isinstance(item, dict)
+        and isinstance(item.get("game"), dict)
+        and item["game"].get("game_id")
+    )
+    try:
+        changes = nfl_snapshot_store.get_changes_many(game_ids)
+        return build_nfl_command_center(home_payload, changes)
+    except SnapshotStoreUnavailable:
+        logger.warning("NFL Command Center snapshot history is unavailable")
+        return build_nfl_command_center(
+            home_payload, {}, snapshot_available=False
+        )
 
 
 @app.post(

@@ -140,6 +140,11 @@ class PredictionSnapshotStoreProtocol(Protocol):
     def get_changes(self, game_id: str) -> SnapshotChangesResponse | None:
         ...
 
+    def get_changes_many(
+        self, game_ids: tuple[str, ...]
+    ) -> dict[str, SnapshotChangesResponse]:
+        ...
+
     def clear_game(self, game_id: str) -> int:
         ...
 
@@ -277,6 +282,16 @@ class PredictionSnapshotStore:
                     else "No prior snapshot is available for comparison."
                 ),
             )
+
+    def get_changes_many(
+        self, game_ids: tuple[str, ...]
+    ) -> dict[str, SnapshotChangesResponse]:
+        with self._lock:
+            return {
+                game_id: result
+                for game_id in game_ids
+                if (result := self.get_changes(game_id)) is not None
+            }
 
     def clear_game(self, game_id: str) -> int:
         with self._lock:
@@ -562,6 +577,51 @@ class PostgresPredictionSnapshotStore:
             snapshot_store_type="postgres",
             snapshot_persistence=True,
         )
+
+    def get_changes_many(
+        self, game_ids: tuple[str, ...]
+    ) -> dict[str, SnapshotChangesResponse]:
+        if not game_ids:
+            return {}
+        try:
+            with self._connect() as connection:
+                with connection.cursor(row_factory=dict_row) as cursor:
+                    cursor.execute(
+                        f"WITH ranked AS (SELECT {_SNAPSHOT_COLUMNS}, "
+                        "COUNT(*) OVER (PARTITION BY game_id) AS snapshot_count, "
+                        "ROW_NUMBER() OVER (PARTITION BY game_id ORDER BY "
+                        "captured_at DESC, id DESC) AS row_number "
+                        "FROM nfl_prediction_snapshots WHERE game_id = ANY(%s)) "
+                        "SELECT * FROM ranked WHERE row_number <= 2 "
+                        "ORDER BY game_id, row_number",
+                        (list(game_ids),),
+                    )
+                    grouped: dict[str, list[Mapping[str, Any]]] = {}
+                    for row in cursor.fetchall():
+                        grouped.setdefault(str(row["game_id"]), []).append(row)
+            results: dict[str, SnapshotChangesResponse] = {}
+            for game_id, rows in grouped.items():
+                history = tuple(self._snapshot_from_row(row) for row in rows)
+                comparison = self._comparison(history)
+                results[game_id] = SnapshotChangesResponse(
+                    game_id=game_id,
+                    snapshot_count=int(rows[0]["snapshot_count"]),
+                    current_snapshot=history[0],
+                    previous_snapshot=history[1] if len(history) > 1 else None,
+                    latest_comparison=comparison,
+                    changed=comparison.changed if comparison else False,
+                    significance=comparison.significance if comparison else "none",
+                    summary=(comparison.summary if comparison else "No prior snapshot is available for comparison."),
+                    snapshot_store_type="postgres",
+                    snapshot_persistence=True,
+                )
+            return results
+        except SnapshotStoreUnavailable:
+            raise
+        except Exception as exc:
+            raise SnapshotStoreUnavailable(
+                "PostgreSQL snapshot changes are unavailable"
+            ) from exc
 
     def clear_game(self, game_id: str) -> int:
         try:
