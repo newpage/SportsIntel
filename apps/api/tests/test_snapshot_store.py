@@ -3,12 +3,16 @@ from datetime import datetime, timedelta, timezone
 import logging
 
 from fastapi.testclient import TestClient
+import pytest
 
 import app.main as main_module
 import app.sports_api as sports_api
 from app.intelligence.prediction_change import PredictionSnapshot
 from app.intelligence.snapshot_store import (
+    PostgresPredictionSnapshotStore,
     PredictionSnapshotStore,
+    SnapshotStoreUnavailable,
+    create_prediction_snapshot_store,
     nfl_snapshot_store,
 )
 from app.main import app
@@ -351,6 +355,31 @@ def test_snapshot_failure_does_not_break_nfl_response(
     assert "capture failed" in caplog.text
 
 
+def test_database_snapshot_failure_does_not_break_nfl_response(
+    monkeypatch,
+    caplog,
+) -> None:
+    monkeypatch.setattr(
+        sports_api,
+        "_ensure_provider",
+        lambda sport: _NFLProvider(game_count=1),
+    )
+    monkeypatch.setattr(
+        sports_api.nfl_snapshot_store,
+        "add_snapshot",
+        lambda snapshot: (_ for _ in ()).throw(
+            SnapshotStoreUnavailable("database unavailable")
+        ),
+    )
+
+    with caplog.at_level(logging.ERROR):
+        response = TestClient(app).get("/api/sports/nfl")
+
+    assert response.status_code == 200
+    assert "game_id=nfl-auto-0" in caplog.text
+    assert "database unavailable" in caplog.text
+
+
 def test_history_endpoint_and_invalid_limit() -> None:
     nfl_snapshot_store.add_snapshot(_snapshot())
     nfl_snapshot_store.add_snapshot(
@@ -373,6 +402,26 @@ def test_history_endpoint_returns_not_found() -> None:
     )
 
     assert response.status_code == 404
+
+
+def test_history_endpoint_returns_service_error_on_store_outage(
+    monkeypatch,
+) -> None:
+    monkeypatch.setattr(
+        main_module.nfl_snapshot_store,
+        "get_history",
+        lambda game_id, limit: (_ for _ in ()).throw(
+            SnapshotStoreUnavailable("credential-bearing raw error")
+        ),
+    )
+
+    response = TestClient(app).get("/api/sports/nfl/nfl-123/history")
+
+    assert response.status_code == 503
+    assert response.json() == {
+        "detail": "NFL snapshot history service is unavailable"
+    }
+    assert "credential-bearing" not in response.text
 
 
 def test_changes_endpoint_with_zero_one_and_multiple_snapshots() -> None:
@@ -449,3 +498,36 @@ def test_review_snapshot_diagnostics(monkeypatch) -> None:
     assert payload["notable_change_count"] == 1
     assert payload["snapshot_store_type"] == "memory"
     assert payload["snapshot_persistence"] is False
+
+
+def test_store_configuration_defaults_and_explicit_selection() -> None:
+    default_store = create_prediction_snapshot_store({})
+    memory_store = create_prediction_snapshot_store(
+        {"NFL_SNAPSHOT_STORE": "memory", "DATABASE_URL": "ignored"}
+    )
+    postgres_store = create_prediction_snapshot_store(
+        {"DATABASE_URL": "postgresql://example.invalid/sportsintel"}
+    )
+
+    assert isinstance(default_store, PredictionSnapshotStore)
+    assert isinstance(memory_store, PredictionSnapshotStore)
+    assert isinstance(postgres_store, PostgresPredictionSnapshotStore)
+    assert postgres_store.store_type == "postgres"
+    assert postgres_store.persistence_enabled is True
+
+
+def test_explicit_postgres_configuration_requires_database_url() -> None:
+    with pytest.raises(ValueError, match="DATABASE_URL is required"):
+        create_prediction_snapshot_store({"NFL_SNAPSHOT_STORE": "postgres"})
+
+
+def test_memory_store_health_is_nonpersistent() -> None:
+    store = PredictionSnapshotStore()
+    store.add_snapshot(_snapshot())
+
+    health = store.health()
+
+    assert health.snapshot_store_type == "memory"
+    assert health.snapshot_persistence is False
+    assert health.retained_snapshot_count == 1
+    assert health.database_reachable is False

@@ -38,6 +38,7 @@ __all__ = [
     "build_prediction_snapshot",
     "compare_prediction_snapshots",
     "PredictionSnapshotStore",
+    "PostgresPredictionSnapshotStore",
     "PredictionSnapshotStoreProtocol",
     "SnapshotStoreResult",
     "SnapshotHistoryResponse",
@@ -45,6 +46,9 @@ __all__ = [
     "SnapshotClearGameResponse",
     "SnapshotClearAllResponse",
     "SnapshotStoreDiagnostics",
+    "SnapshotStoreHealth",
+    "SnapshotStoreUnavailable",
+    "create_prediction_snapshot_store",
     "nfl_snapshot_store",
 ]
 
@@ -86,6 +90,7 @@ from app.intelligence.prediction_change import (
 )
 
 from app.intelligence.snapshot_store import (
+    PostgresPredictionSnapshotStore,
     PredictionSnapshotStore,
     PredictionSnapshotStoreProtocol,
     SnapshotChangesResponse,
@@ -93,6 +98,9 @@ from app.intelligence.snapshot_store import (
     SnapshotClearGameResponse,
     SnapshotHistoryResponse,
     SnapshotStoreDiagnostics,
+    SnapshotStoreHealth,
     SnapshotStoreResult,
+    SnapshotStoreUnavailable,
+    create_prediction_snapshot_store,
     nfl_snapshot_store,
 )
