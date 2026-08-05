@@ -1,4 +1,12 @@
 .env
+production.env
+*.dump
+*.dump.partial
+deployment.json
+release.env
+deploy/apache/*.htpasswd
+deploy/apache/*.key
+deploy/apache/*.crt
 node_modules/
 .next/
 __pycache__/

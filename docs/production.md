@@ -1,5 +1,9 @@
 # SportsIntel production deployment
 
+For the complete private-preview release, authentication, backup, restore, and
+rollback workflow, use [private-production-preview.md](private-production-preview.md).
+The guidance below remains a concise description of the application runtime.
+
 This guide describes the first supported Linux deployment: Docker Compose on a
 single host, PostgreSQL in the Compose stack, and Apache terminating HTTPS. The
 API and web ports remain bound to loopback; only Apache is internet-facing.
@@ -34,8 +38,8 @@ the snapshot store is not PostgreSQL.
 | --- | --- | --- |
 | `API_PORT` | Yes | Loopback host port published for FastAPI. |
 | `WEB_PORT` | Yes | Loopback host port published for Next.js. |
-| `POSTGRES_PORT` | Operational choice | Loopback PostgreSQL port; do not expose through the firewall. |
-| `NEXT_PUBLIC_API_URL` | Yes | Public HTTPS API origin used by the web build/runtime. |
+| `SPORTSINTEL_INTERNAL_API_URL` | Yes | Server-only API origin. Use `http://api:8000` inside production Compose. |
+| `NEXT_PUBLIC_API_URL` | Yes | Browser-visible same-origin API prefix. Use `/api`; never put an internal hostname here. |
 | `SPORTSINTEL_ENV` | Yes | Must be `production` for production validation and HSTS. |
 | `SPORTSINTEL_VERSION` | Yes | Release version returned by `/health`. |
 | `SPORTSINTEL_BUILD_TIMESTAMP` | Yes | Timezone-aware ISO-8601 build/deploy timestamp. |
@@ -117,8 +121,8 @@ Verify automatic renewal before launch. HSTS is emitted by the API only when
 ## Firewall
 
 Permit SSH only from approved administration networks and expose only TCP 80 and
-443 publicly. Deny public access to 3000, 8000, 3300, 8300, 5432, and the chosen
-`POSTGRES_PORT`. Compose binds published service ports to `127.0.0.1`, providing
+443 publicly. Deny public access to 3000, 8000, 3300, 8300, and 5432. Production
+Compose does not publish PostgreSQL. Its application ports bind to `127.0.0.1`, providing
 an additional boundary but not replacing host firewall policy.
 
 ## Administrative API

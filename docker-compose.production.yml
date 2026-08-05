@@ -1,0 +1,73 @@
+name: ${COMPOSE_PROJECT_NAME:-sportsintel}
+
+services:
+  postgres:
+    image: postgres:17-alpine
+    restart: unless-stopped
+    stop_grace_period: 30s
+    env_file: ${SPORTSINTEL_ENV_FILE:-/opt/sportsintel/shared/production.env}
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+      - ./db/init:/docker-entrypoint-initdb.d:ro
+    networks: [database]
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+
+  api:
+    build: ./apps/api
+    init: true
+    restart: unless-stopped
+    stop_grace_period: 35s
+    env_file: ${SPORTSINTEL_ENV_FILE:-/opt/sportsintel/shared/production.env}
+    volumes:
+      - prediction-data:/app/data
+    ports:
+      - "127.0.0.1:${API_PORT:-8300}:8000"
+    networks: [application, database]
+    depends_on:
+      postgres:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/health', timeout=3)"]
+      interval: 30s
+      timeout: 5s
+      start_period: 15s
+      retries: 3
+
+  web:
+    build: ./apps/web
+    init: true
+    restart: unless-stopped
+    stop_grace_period: 30s
+    env_file: ${SPORTSINTEL_ENV_FILE:-/opt/sportsintel/shared/production.env}
+    environment:
+      SPORTSINTEL_INTERNAL_API_URL: ${SPORTSINTEL_INTERNAL_API_URL:-http://api:8000}
+      NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL:-/api}
+    ports:
+      - "127.0.0.1:${WEB_PORT:-3300}:3000"
+    networks: [application]
+    depends_on:
+      api:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:3000/').then(r=>{if(!r.ok)process.exit(1)}).catch(()=>process.exit(1))"]
+      interval: 30s
+      timeout: 5s
+      start_period: 15s
+      retries: 3
+
+networks:
+  application:
+    name: ${COMPOSE_PROJECT_NAME:-sportsintel}-application
+  database:
+    name: ${COMPOSE_PROJECT_NAME:-sportsintel}-database
+    internal: true
+
+volumes:
+  postgres-data:
+    name: ${COMPOSE_PROJECT_NAME:-sportsintel}-postgres-data
+  prediction-data:
+    name: ${COMPOSE_PROJECT_NAME:-sportsintel}-prediction-data
