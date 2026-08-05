@@ -125,3 +125,44 @@ for the application database. The clear endpoints are administrative diagnostics
 and must be protected by authentication before public deployment. Credentials
 and connection strings are never returned by health or history responses, and
 database errors are reduced to a generic 503 response for API clients.
+
+## Continuous integration
+
+`.github/workflows/ci.yml` runs for pull requests targeting `main`, pushes to
+`main`, and manual dispatches. Superseded pull-request or feature-branch runs are
+cancelled; `main` runs are never cancelled by later pushes.
+
+The workflow exposes four independent required checks:
+
+- **Backend quality** installs Python 3.12 dependencies with a pip download
+  cache, compiles API/test sources, and runs the complete non-PostgreSQL suite.
+- **PostgreSQL integration** starts an isolated PostgreSQL 17 service, applies
+  the idempotent snapshot schema, verifies the table, and runs the dedicated
+  integration suite with `TEST_DATABASE_URL`.
+- **Frontend quality** installs Node 22 dependencies with `npm ci` and the npm
+  cache, then runs TypeScript validation and the production Next.js build. No
+  lint step runs because this repository does not currently configure a linter.
+- **Docker validation** validates Compose, builds API/web images without
+  publishing them, starts the stack with temporary CI-only credentials, checks
+  `/health` and the snapshot-store health endpoint, and always tears down the
+  stack and volumes. Compose logs are collected when the smoke test fails.
+
+Equivalent local commands:
+
+```bash
+python -m pip install -r apps/api/requirements-dev.txt
+python -m compileall -q apps/api/app apps/api/tests
+PYTHONPATH=apps/api NFL_SNAPSHOT_STORE=memory pytest -q --ignore=apps/api/tests/test_postgres_snapshot_store.py
+PYTHONPATH=apps/api TEST_DATABASE_URL=postgresql://USER:PASSWORD@127.0.0.1:5432/DB pytest -q apps/api/tests/test_postgres_snapshot_store.py
+cd apps/web && npm ci && npm run typecheck && npm run build
+docker compose config --quiet
+docker compose build api web
+```
+
+All four checks are recommended as required for `main`; see
+`docs/branch-protection.md`. Test result XML is uploaded when a pytest job fails.
+Open the failed job and its artifact first, then reproduce its displayed command
+locally. For Docker failures, inspect the automatically collected Compose logs.
+Use GitHub’s **Re-run failed jobs** action after pushing a fix, or
+**Run workflow** for a manual validation. Fix failures on the same PR branch;
+do not bypass or weaken checks to obtain a green run.
