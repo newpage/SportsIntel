@@ -29,6 +29,8 @@ __all__ = [
     "build_consensus_line",
     "ConsensusQuality",
     "build_consensus_quality",
+    "QualifiedConsensus",
+    "build_qualified_consensus",
 ]
 
 from app.intelligence.team_health import TeamHealth, TeamHealthEngine
@@ -52,4 +54,9 @@ from app.intelligence.consensus import (
 from app.intelligence.consensus_quality import (
     ConsensusQuality,
     build_consensus_quality,
+)
+
+from app.intelligence.qualified_consensus import (
+    QualifiedConsensus,
+    build_qualified_consensus,
 )

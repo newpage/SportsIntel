@@ -3,6 +3,7 @@ import { notFound } from "next/navigation";
 import { getSport } from "../../../lib/api";
 import type {
   MarketPrediction,
+  QualifiedConsensus,
   SportGameEnvelope,
   SportHomeResponse,
 } from "../../../lib/sports";
@@ -146,48 +147,11 @@ export default async function NflGamePage({
     typeof metadata.market_signal_summary === "string"
       ? metadata.market_signal_summary
       : "A complete moneyline market is not available.";
-  const consensus =
-    metadata.consensus && typeof metadata.consensus === "object"
-      ? (metadata.consensus as Record<string, unknown>)
+  const qualifiedConsensus =
+    metadata.qualified_consensus &&
+    typeof metadata.qualified_consensus === "object"
+      ? (metadata.qualified_consensus as QualifiedConsensus)
       : null;
-  const consensusClassification =
-    typeof consensus?.classification === "string"
-      ? consensus.classification
-      : "Market unavailable";
-  const consensusAgreement =
-    typeof consensus?.agreement === "string"
-      ? consensus.agreement
-      : "unavailable";
-  const consensusMarketFavorite =
-    typeof consensus?.market_favorite === "string"
-      ? consensus.market_favorite
-      : null;
-  const consensusSummary =
-    typeof consensus?.summary === "string"
-      ? consensus.summary
-      : "A complete no-vig moneyline market is not available.";
-  const consensusQuality =
-    metadata.consensus_quality &&
-    typeof metadata.consensus_quality === "object"
-      ? (metadata.consensus_quality as Record<string, unknown>)
-      : null;
-  const consensusQualityScore =
-    typeof consensusQuality?.score === "number"
-      ? consensusQuality.score
-      : null;
-  const consensusQualityLabel =
-    typeof consensusQuality?.label === "string"
-      ? consensusQuality.label
-      : "Unavailable";
-  const consensusQualityStatus =
-    typeof consensusQuality?.status === "string"
-      ? consensusQuality.status
-      : "hold";
-  const consensusQualityReasons = Array.isArray(consensusQuality?.reasons)
-    ? consensusQuality.reasons.filter(
-        (reason): reason is string => typeof reason === "string",
-      )
-    : [];
   const predictionWaterfall =
     metadata.prediction_waterfall &&
     typeof metadata.prediction_waterfall === "object"
@@ -426,55 +390,36 @@ export default async function NflGamePage({
           </section>
         )}
 
-        {marketAvailable && consensus && (
+        {qualifiedConsensus && (
           <section className="mlb-detail-grid">
             <div className="market-card">
-              <span>Consensus</span>
-              <strong>{consensusClassification}</strong>
-              <small>{consensusSummary}</small>
+              <span>Qualified consensus</span>
+              <strong>{qualifiedConsensus.status}</strong>
+              <small>Observation only · does not change the prediction</small>
             </div>
             <div className="market-card">
-              <span>Model and market</span>
-              <strong>
-                {consensusAgreement === "agree"
-                  ? "Agreement"
-                  : consensusAgreement === "split"
-                    ? "Different favorites"
-                    : "Market even"}
-              </strong>
-              <small>Observation only</small>
-            </div>
-            <div className="market-card">
-              <span>Market favorite</span>
-              <strong>{consensusMarketFavorite || "Even market"}</strong>
-              <small>Does not change the SportsIntel pick</small>
-            </div>
-          </section>
-        )}
-
-        {consensusQuality && (
-          <section className="mlb-detail-grid">
-            <div className="market-card">
-              <span>Consensus quality</span>
-              <strong>
-                {consensusQualityScore !== null
-                  ? `${consensusQualityScore}% ${consensusQualityLabel}`
-                  : consensusQualityLabel}
-              </strong>
-              <small>Signal reliability, not prediction confidence</small>
-            </div>
-            <div className="market-card">
-              <span>Review status</span>
-              <strong>{consensusQualityStatus}</strong>
-              <small>Observation only</small>
-            </div>
-            <div className="market-card">
-              <span>Quality checks</span>
-              <strong>{consensusQualityReasons.length} checks</strong>
+              <span>Classification</span>
+              <strong>{qualifiedConsensus.classification}</strong>
               <small>
-                {consensusQualityReasons[0] ||
-                  "No quality explanation is available."}
+                {qualifiedConsensus.quality_score}/100 {qualifiedConsensus.quality_label} quality
               </small>
+            </div>
+            <div className="market-card">
+              <span>Model vs. market</span>
+              <strong>
+                {(qualifiedConsensus.model_probability * 100).toFixed(1)}% model
+              </strong>
+              <small>
+                {qualifiedConsensus.no_vig_market_probability !== null &&
+                qualifiedConsensus.no_vig_market_probability !== undefined
+                  ? `${(qualifiedConsensus.no_vig_market_probability * 100).toFixed(1)}% no-vig market`
+                  : "No-vig market unavailable"}
+              </small>
+            </div>
+            <div className="market-card">
+              <span>Decision context</span>
+              <strong>{qualifiedConsensus.market_favorite || "Market unavailable"}</strong>
+              <small>{qualifiedConsensus.explanation}</small>
             </div>
           </section>
         )}
