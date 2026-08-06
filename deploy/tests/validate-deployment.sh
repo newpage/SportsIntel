@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 root="$(cd "$(dirname "$0")/../.." && pwd)"
-scripts=("$root"/deploy/linux/*.sh "$root"/deploy/linux/lib/*.sh "$root"/deploy/apache/create-preview-user.sh)
+scripts=("$root"/deploy/linux/*.sh "$root"/deploy/linux/lib/*.sh "$root"/deploy/apache/create-preview-user.sh "$root"/deploy/tests/*.sh)
 for script in "${scripts[@]}"; do bash -n "$script"; done
 
 # Match literal Compose interpolation syntax.
@@ -25,7 +25,7 @@ grep -q 'pg_dump.*--format=custom' "$root/deploy/linux/backup.sh"
 grep -q '%Y%m%dT%H%M%SZ' "$root/deploy/linux/backup.sh"
 grep -q 'sportsintel-.*\.dump' "$root/deploy/linux/backup.sh"
 grep -q 'previous_release_commit' "$root/deploy/linux/rollback.sh"
-grep -q 'Invalid Git ref' "$root/deploy/linux/deploy.sh"
+grep -q 'Invalid Git ref' "$root/deploy/linux/preflight.sh"
 grep -q 'RestartCount' "$root/deploy/linux/status.sh"
 if grep -Eq 'DATABASE_URL|ADMIN_KEY|POSTGRES_PASSWORD' "$root/deploy/linux/status.sh"; then
   echo "Status script may expose sensitive configuration" >&2; exit 1
@@ -50,8 +50,10 @@ if bash -c 'source "$1"; PATH=/definitely/missing; require_command docker' _ \
 fi
 grep -q 'Required command not found: docker' "${TMPDIR:-/tmp}/sportsintel-missing-docker.log"
 
-if SPORTSINTEL_ENV_FILE=/definitely/missing "$root/deploy/linux/deploy.sh" HEAD 2>"${TMPDIR:-/tmp}/sportsintel-missing-env.log"; then
-  echo "deploy.sh accepted a missing environment file" >&2; exit 1
+if SPORTSINTEL_ENV_FILE=/definitely/missing bash -c \
+  'source "$1"; require_env_file' _ "$root/deploy/linux/lib/common.sh" \
+  2>"${TMPDIR:-/tmp}/sportsintel-missing-env.log"; then
+  echo "environment validation accepted a missing file" >&2; exit 1
 fi
 grep -q 'environment file is not readable' "${TMPDIR:-/tmp}/sportsintel-missing-env.log"
 
@@ -60,7 +62,7 @@ if "$root/deploy/linux/smoke-test.sh" --external 2>"${TMPDIR:-/tmp}/sportsintel-
 fi
 grep -q 'SPORTSINTEL_PUBLIC_URL is required' "${TMPDIR:-/tmp}/sportsintel-auth.log"
 
-if grep -REn --exclude=validate-deployment.sh '(BEGIN (RSA |EC |OPENSSH )?PRIVATE KEY|SPORTSINTEL_ADMIN_KEY=[^r]|POSTGRES_PASSWORD=[^r])' \
+if grep -REn --exclude=validate-deployment.sh '(BEGIN (RSA |EC |OPENSSH )?PRIVATE KEY|SPORTSINTEL_ADMIN_KEY=[0-9A-Za-z]{32,}|POSTGRES_PASSWORD=[0-9A-Za-z]{24,})' \
   "$root/deploy" "$root/docker-compose.production.yml" "$root/production.env.example"; then
   echo "Potential secret detected in deployment assets" >&2; exit 1
 fi

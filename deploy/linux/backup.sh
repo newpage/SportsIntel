@@ -3,7 +3,7 @@ set -euo pipefail
 # shellcheck source=deploy/linux/lib/common.sh
 source "$(dirname "$0")/lib/common.sh"
 require_tools docker date find
-require_env_file
+load_environment
 backup_dir="${SPORTSINTEL_BACKUP_DIR:-$(deployment_root)/backups}"
 retention_days="${SPORTSINTEL_BACKUP_RETENTION_DAYS:-14}"
 [[ "$retention_days" =~ ^[0-9]+$ ]] || { echo "SPORTSINTEL_BACKUP_RETENTION_DAYS must be a nonnegative integer" >&2; exit 2; }

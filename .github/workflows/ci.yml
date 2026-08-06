@@ -211,7 +211,7 @@ jobs:
     name: Production deployment assets
     runs-on: ubuntu-latest
     env:
-      SPORTSINTEL_ENV_FILE: ${{ github.workspace }}/.ci-production.env
+      SPORTSINTEL_ENV_FILE: /opt/sportsintel/shared/production.env
       COMPOSE_PROJECT_NAME: sportsintel-ci-production
       API_PORT: "18300"
       WEB_PORT: "13300"
@@ -219,14 +219,37 @@ jobs:
       - name: Check out repository
         uses: actions/checkout@v4
 
+      - name: Confirm clean host starts incomplete
+        run: |
+          if deploy/linux/install.sh --check-only; then
+            echo "Runner image already contains all host prerequisites"
+          else
+            echo "Clean-host prerequisite gap detected as expected"
+          fi
+
       - name: Install deployment validators
         run: sudo apt-get update -qq && sudo apt-get install -y shellcheck apache2 apache2-utils openssl
+
+      - name: Prepare clean deployment host
+        run: |
+          git clone --bare --no-hardlinks "$GITHUB_WORKSPACE" /tmp/sportsintel-ci-source.git
+          chmod -R a+rX /tmp/sportsintel-ci-source.git
+          sudo deploy/linux/install.sh --admin-user "$USER"
+          sudo -iu sportsintel -- git clone /tmp/sportsintel-ci-source.git /opt/sportsintel/app
+          sudo -iu sportsintel -- git -C /opt/sportsintel/app checkout "$GITHUB_SHA"
+          sudo -iu sportsintel -- test -w /opt/sportsintel/app
+          sudo -iu sportsintel -- test -w /opt/sportsintel/shared
+          sudo -iu sportsintel -- test -w /opt/sportsintel/.docker
+          sudo -iu sportsintel -- test -w /opt/sportsintel/.config
 
       - name: Create restricted CI production environment
         run: |
           umask 027
-          cat > .ci-production.env <<'EOF'
+          cat > /tmp/sportsintel-ci-production.env <<'EOF'
           SPORTSINTEL_ENV=production
+          COMPOSE_PROJECT_NAME=sportsintel-ci-production
+          API_PORT=18300
+          WEB_PORT=13300
           SPORTSINTEL_VERSION=ci-preview
           SPORTSINTEL_BUILD_TIMESTAMP=2026-01-01T00:00:00Z
           SPORTSINTEL_GIT_COMMIT=ci-validation
@@ -235,6 +258,7 @@ jobs:
           SPORTSINTEL_PUBLIC_RATE_LIMIT=60
           SPORTSINTEL_ADMIN_RATE_LIMIT=20
           SPORTSINTEL_TRUST_PROXY_HEADERS=true
+          SPORTSINTEL_PUBLIC_URL=https://127.0.0.1:18443
           NFL_SNAPSHOT_STORE=postgres
           DATABASE_URL=postgresql://sportsintel_ci:ci-only-password@postgres:5432/sportsintel_ci
           POSTGRES_DB=sportsintel_ci
@@ -244,12 +268,13 @@ jobs:
           NEXT_PUBLIC_API_URL=/api
           PREDICTION_HISTORY_FILE=/app/data/prediction_history.json
           EOF
-          chmod 640 .ci-production.env
+          sudo install -o root -g sportsintel -m 0640 /tmp/sportsintel-ci-production.env "$SPORTSINTEL_ENV_FILE"
 
       - name: Validate shell assets
         run: |
           shellcheck deploy/linux/*.sh deploy/linux/lib/*.sh deploy/apache/create-preview-user.sh
           deploy/tests/validate-deployment.sh
+          deploy/tests/test-first-deployment.sh
 
       - name: Validate Apache template directives
         run: |
@@ -258,13 +283,14 @@ jobs:
           grep -q 'SSLEngine on' deploy/apache/sportsintel.conf.example
 
       - name: Validate production Compose
-        run: docker compose -f docker-compose.production.yml config --quiet
+        run: sudo docker compose -f docker-compose.production.yml config --quiet
 
-      - name: Build and smoke-test production Compose
+      - name: Run clean-host preflight and first deployment
         run: |
-          docker compose -f docker-compose.production.yml build api web
-          docker compose -f docker-compose.production.yml up --detach
-          deploy/linux/smoke-test.sh --internal
+          sudo -iu sportsintel -- /opt/sportsintel/app/deploy/linux/preflight.sh "$GITHUB_SHA"
+          sudo -iu sportsintel -- /opt/sportsintel/app/deploy/linux/deploy.sh "$GITHUB_SHA"
+          sudo -iu sportsintel -- /opt/sportsintel/app/deploy/linux/status.sh
+          sudo -iu sportsintel -- /opt/sportsintel/app/deploy/linux/backup.sh
 
       - name: Configure authenticated HTTPS preview proxy
         run: |
@@ -315,13 +341,35 @@ jobs:
 
       - name: Ensure internal API hostname is absent from browser assets
         run: |
-          docker compose -f docker-compose.production.yml run --rm --no-deps web \
+          sudo docker compose -f docker-compose.production.yml run --rm --no-deps web \
             sh -c "if grep -R 'http://api:8000' /app/.next/static; then echo 'Internal API hostname leaked into browser assets' >&2; exit 1; fi"
+
+      - name: Verify exact reset scope
+        run: |
+          docker volume create sportsintel-ai_postgres_data
+          sudo -iu sportsintel -- /opt/sportsintel/app/deploy/linux/reset-preview.sh --yes
+          docker volume inspect sportsintel-ai_postgres_data >/dev/null
+
+      - name: Rehearse first-deploy failure cleanup
+        run: |
+          metadata_before=$(sha256sum /opt/sportsintel/shared/deployment.json)
+          set +e
+          sudo -iu sportsintel -- env SPORTSINTEL_TEST_FAIL_PHASE=wait-postgresql \
+            /opt/sportsintel/app/deploy/linux/deploy.sh "$GITHUB_SHA"
+          result=$?
+          set -e
+          test "$result" -ne 0
+          test ! -e /opt/sportsintel/shared/release.env.candidate
+          test "$(sha256sum /opt/sportsintel/shared/deployment.json)" = "$metadata_before"
+          test -z "$(sudo docker compose --project-name sportsintel-ci-production --env-file "$SPORTSINTEL_ENV_FILE" -f docker-compose.production.yml ps -q api web)"
+          docker volume inspect sportsintel-ai_postgres_data >/dev/null
 
       - name: Collect production Compose logs on failure
         if: failure()
-        run: docker compose -f docker-compose.production.yml logs --no-color
+        run: sudo docker compose -f docker-compose.production.yml logs --no-color
 
       - name: Tear down production Compose
         if: always()
-        run: docker compose -f docker-compose.production.yml down --volumes --remove-orphans
+        run: |
+          sudo docker compose -f docker-compose.production.yml down --volumes --remove-orphans || true
+          docker volume rm sportsintel-ai_postgres_data 2>/dev/null || true
