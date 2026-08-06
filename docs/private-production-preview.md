@@ -28,10 +28,18 @@ is green for the exact commit before deployment.
 ```bash
 git clone <REPOSITORY_URL> /tmp/sportsintel-bootstrap
 cd /tmp/sportsintel-bootstrap
-deploy/linux/install.sh --check-only
-sudo deploy/linux/install.sh
-sudo -u sportsintel git clone <REPOSITORY_URL> /opt/sportsintel/app
+deploy/linux/install.sh --check-only || true
+sudo deploy/linux/install.sh --admin-user <SSH_USERNAME>
+```
+
+Reconnect after installation so new `sportsintel` and Docker group memberships
+take effect. Deployment repository operations run as the service account; this
+avoids broad Git `safe.directory` exceptions and keeps checkout ownership stable.
+
+```bash
+sudo -iu sportsintel -- git clone <REPOSITORY_URL> /opt/sportsintel/app
 cd /opt/sportsintel/app
+sudo -iu sportsintel -- git -C /opt/sportsintel/app fetch --tags origin
 ```
 
 The install script reports missing packages and planned directory changes. It
@@ -43,8 +51,7 @@ does not alter Apache or firewall rules. Docker-group access is root-equivalent.
 sudo install -o root -g sportsintel -m 0640 production.env.example \
   /opt/sportsintel/shared/production.env
 sudoedit /opt/sportsintel/shared/production.env
-openssl rand -base64 48
-openssl rand -base64 36
+sudo -iu sportsintel -- /opt/sportsintel/app/deploy/linux/generate-secrets.sh --print
 ```
 
 Replace `<PREVIEW_DOMAIN>`, database password, and admin key placeholders. Keep
@@ -56,6 +63,17 @@ in `/opt/sportsintel/shared/release.env`; operators do not edit those values.
 components on the private application network. `NEXT_PUBLIC_API_URL=/api` is the
 browser-safe same-origin prefix routed by Apache. Never expose `api:8000` through
 a `NEXT_PUBLIC_*` variable or substitute it into client bundles.
+The helper uses `openssl rand -hex 32`; hexadecimal passwords are URL-safe. Copy
+the generated PostgreSQL value into both `POSTGRES_PASSWORD` and the password
+portion of `DATABASE_URL`. Raw Base64 values containing `/` or `+` can corrupt a
+URL and are rejected by preflight with: “DATABASE_URL is invalid. Use a URL-safe
+password or percent-encode it.” Apache preview credentials remain separate.
+
+Before changing Git refs or starting any container, run:
+
+```bash
+sudo -iu sportsintel -- /opt/sportsintel/app/deploy/linux/preflight.sh <RELEASE_SHA_OR_TAG>
+```
 
 ## Apache, authentication, and HTTPS
 
@@ -83,8 +101,8 @@ available to local monitoring. The template allows 10 MB requests and a
 Deploy an immutable reviewed SHA or signed/reviewed tag, never a dirty checkout:
 
 ```bash
-sudo -u sportsintel /opt/sportsintel/app/deploy/linux/deploy.sh <RELEASE_SHA_OR_TAG>
-sudo -u sportsintel /opt/sportsintel/app/deploy/linux/status.sh
+sudo -iu sportsintel -- /opt/sportsintel/app/deploy/linux/deploy.sh <RELEASE_SHA_OR_TAG>
+sudo -iu sportsintel -- /opt/sportsintel/app/deploy/linux/status.sh
 ```
 
 The release process fetches the ref, records the previous commit, builds images,
@@ -92,6 +110,11 @@ starts PostgreSQL, reapplies the idempotent schema, updates services, waits for
 health, runs internal smoke tests, and atomically writes
 `/opt/sportsintel/shared/deployment.json`. A failure stops metadata promotion and
 prints the failed validation; inspect `docker compose ... logs` before retrying.
+Deployment waits up to 120 seconds for both container health and `pg_isready`
+before applying the schema. Release environment and metadata are promoted only
+after API/web health and smoke tests pass. On failure the prior checkout and
+application are restored where practical, PostgreSQL data is never deleted, and
+the failing phase plus a safe cleanup command are printed.
 
 For external acceptance:
 
@@ -158,6 +181,21 @@ deploy/linux/rollback.sh
 Rollback uses `previous_release_commit`, preserves PostgreSQL data, rebuilds the
 prior application, and verifies health. Database-destructive migrations need a
 separate compatibility and restore plan; Sprint 14.10 contains none.
+
+## Failed first-install recovery
+
+Use the exact project-scoped helper—never `docker system prune`:
+
+```bash
+sudo -iu sportsintel -- /opt/sportsintel/app/deploy/linux/diagnose.sh --output /tmp/sportsintel-diagnostics.txt
+sudo -iu sportsintel -- /opt/sportsintel/app/deploy/linux/reset-preview.sh
+# Only when the checkout/shared/backups should also be removed:
+sudo -iu sportsintel -- /opt/sportsintel/app/deploy/linux/reset-preview.sh --remove-files
+```
+
+The reset helper names the exact `COMPOSE_PROJECT_NAME` and removes only that
+project's declared containers, networks, and volumes. It does not match or remove
+the separate `sportsintel-ai` project or its volumes.
 
 ## Troubleshooting
 
