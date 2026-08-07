@@ -222,6 +222,7 @@ button,.primary-button-link,.secondary-button,.danger-button { transition:transf
 button:hover,.primary-button-link:hover { transform:translateY(-1px); }
 button:focus-visible,a:focus-visible { outline:none; box-shadow:var(--focus-ring); }
 .primary-button-link:hover { text-decoration:none; box-shadow:0 9px 22px rgba(11,99,206,.22); }
+.readiness-filter-heading{display:flex;align-items:center;justify-content:flex-end;gap:12px;margin-bottom:12px}.readiness-all-button{background:#fff;color:var(--accent);border:1px solid var(--line)}.readiness-all-button[aria-pressed="true"]{background:var(--accent);color:#fff;border-color:var(--accent)}.readiness-filter{appearance:none;width:100%;text-align:left;color:inherit;cursor:pointer;transition:transform .15s ease,box-shadow .15s ease,border-color .15s ease}.readiness-filter:hover{transform:translateY(-2px);box-shadow:0 9px 22px rgba(20,45,80,.1)}.readiness-filter[data-active="true"]{border-color:var(--accent);box-shadow:0 0 0 3px rgba(11,99,206,.13)}.readiness-filter small{font-weight:400}.readiness-empty{grid-column:1/-1;text-align:center}
 .hero-pick { padding:32px; border-radius:22px; box-shadow:0 14px 36px rgba(11,99,206,.08); }
 .hero-pick-reason { margin-top:4px; }
 .hero-confidence,.confidence-details-trigger.hero { min-height:180px; display:flex; flex-direction:column; justify-content:center; }

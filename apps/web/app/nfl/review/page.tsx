@@ -1,4 +1,5 @@
 import Link from "next/link";
+import NflReadinessQueue from "../../../components/NflReadinessQueue";
 import { getNflReview } from "../../../lib/api";
 import type { NflReviewResponse } from "../../../lib/sports";
 
@@ -156,54 +157,7 @@ export default async function NflReviewPage() {
             {review.attention.review_required_games} games require review
           </div>
         </div>
-        <div className="mlb-detail-grid">
-          <div className="market-card">
-            <span>Ready</span>
-            <strong>{review.attention.disposition_counts.ready || 0}</strong>
-            <small>No major review blocker detected</small>
-          </div>
-          <div className="market-card">
-            <span>Watch</span>
-            <strong>{review.attention.disposition_counts.watch || 0}</strong>
-            <small>Monitor new information before game time</small>
-          </div>
-          <div className="market-card">
-            <span>Hold</span>
-            <strong>{review.attention.disposition_counts.hold || 0}</strong>
-            <small>Resolve major gaps before promotion</small>
-          </div>
-        </div>
-        <div className="grid">
-          {review.attention.queue.map((item) => (
-            <article className="card recommendation-card" key={item.game_id || item.matchup}>
-              <div className="section-heading">
-                <span className="status-badge">{item.disposition_label}</span>
-                <span className="subtle">
-                  {item.priority_level} priority · {item.priority_score}
-                </span>
-              </div>
-              <h3>{item.matchup}</h3>
-              <div className="game-pick-label">Current lean</div>
-              <div className="compact-pick-name">
-                {item.pick || "Not available"}
-                {item.confidence !== null && item.confidence !== undefined
-                  ? ` · ${item.confidence}%`
-                  : ""}
-              </div>
-              <ul>
-                {item.reasons.map((reason) => (
-                  <li key={reason}>{reason}</li>
-                ))}
-              </ul>
-              <div className="subtle">{item.recommended_action}</div>
-              {item.game_id && (
-                <Link className="primary-button-link" href={`/nfl/${item.game_id}`}>
-                  Review game
-                </Link>
-              )}
-            </article>
-          ))}
-        </div>
+        <NflReadinessQueue attention={review.attention} />
       </section>
 
       <section className="games">
