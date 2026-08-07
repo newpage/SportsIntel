@@ -7,10 +7,17 @@ ref="${1:-}"
 root="$(repo_root)"; cd "$root"
 "$root/deploy/linux/preflight.sh" "$ref"
 load_environment
+acquire_operation_lock
 
 phase="initialize"; prior_commit="$(git rev-parse HEAD)"; original_env="$(env_file)"
 had_application=false; [[ -n "$(compose ps -q api web 2>/dev/null)" ]] && had_application=true
 candidate="$(shared_root)/release.env.candidate"; metadata="$(shared_root)/deployment.json"
+active_release="$(shared_root)/release.env"; prior_release="$(shared_root)/release.env.rollback"
+metadata_candidate="${metadata}.candidate"; had_prior_release=false; promotion_started=false
+if [[ -r "$active_release" ]]; then
+  cp -p "$active_release" "$prior_release"
+  had_prior_release=true
+fi
 last_result="$(shared_root)/last-deployment"
 failure_handler() {
   local code=$?
@@ -18,9 +25,22 @@ failure_handler() {
   echo "Deployment failed during phase: $phase" >&2
   printf 'result=failed\nphase=%s\ntime=%s\n' "$phase" "$(date -u +%Y-%m-%dT%H:%M:%SZ)" >"$last_result" || true
   chmod 660 "$last_result" 2>/dev/null || true
-  rm -f "$candidate"
+  rm -f "$candidate" "$metadata_candidate"
+  if $promotion_started; then
+    if $had_prior_release; then
+      mv -f "$prior_release" "$active_release" || true
+    else
+      rm -f "$active_release" "$prior_release"
+    fi
+  else
+    rm -f "$prior_release"
+  fi
   git checkout --detach "$prior_commit" >/dev/null 2>&1 || true
-  export SPORTSINTEL_ENV_FILE="$original_env"
+  if $had_prior_release; then
+    export SPORTSINTEL_ENV_FILE="$active_release"
+  else
+    export SPORTSINTEL_ENV_FILE="$original_env"
+  fi
   if $had_application; then
     echo "Attempting to restore the prior application containers; PostgreSQL data is preserved." >&2
     if compose build api web >/dev/null 2>&1; then
@@ -60,10 +80,14 @@ compose exec -T postgres sh -c 'psql --set=ON_ERROR_STOP=1 --username="$POSTGRES
 echo "PostgreSQL schema applied successfully."
 phase="start-application"; compose up -d api web
 phase="smoke-test"; "$root/deploy/linux/smoke-test.sh" --internal
-phase="promote-release"; mv "$candidate" "$(shared_root)/release.env"
-SPORTSINTEL_ENV_FILE="$(shared_root)/release.env"; export SPORTSINTEL_ENV_FILE
-printf '{\n  "deployed_git_commit": "%s",\n  "previous_release_commit": "%s",\n  "application_version": "%s",\n  "build_timestamp": "%s",\n  "deployment_timestamp": "%s"\n}\n' "$commit" "$previous" "$version" "$timestamp" "$timestamp" >"${metadata}.tmp"
-mv "${metadata}.tmp" "$metadata"; chmod 660 "$metadata"
-printf 'result=success\nphase=complete\ntime=%s\n' "$timestamp" >"$last_result"; chmod 660 "$last_result"
+phase="prepare-promotion"
+printf '{\n  "deployed_git_commit": "%s",\n  "previous_release_commit": "%s",\n  "application_version": "%s",\n  "build_timestamp": "%s",\n  "deployment_timestamp": "%s"\n}\n' "$commit" "$previous" "$version" "$timestamp" "$timestamp" >"$metadata_candidate"
+chmod 660 "$metadata_candidate"
+phase="promote-release"; promotion_started=true
+mv "$candidate" "$active_release"
+mv "$metadata_candidate" "$metadata"
 trap - ERR INT TERM
+SPORTSINTEL_ENV_FILE="$active_release"; export SPORTSINTEL_ENV_FILE
+rm -f "$prior_release"
+printf 'result=success\nphase=complete\ntime=%s\n' "$timestamp" >"$last_result"; chmod 660 "$last_result"
 echo "Deployment succeeded at commit $commit"

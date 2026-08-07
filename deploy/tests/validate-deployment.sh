@@ -15,6 +15,7 @@ if grep -A20 '^  postgres:' "$root/docker-compose.production.yml" | grep -q 'por
 fi
 grep -q 'AuthType Basic' "$root/deploy/apache/sportsintel.conf.example"
 grep -q 'Redirect permanent / https://' "$root/deploy/apache/sportsintel.conf.example"
+grep -q 'Strict-Transport-Security' "$root/deploy/apache/sportsintel.conf.example"
 grep -q 'SPORTSINTEL_INTERNAL_API_URL.*http://api:8000' "$root/docker-compose.production.yml"
 grep -q 'NEXT_PUBLIC_API_URL.*-/api' "$root/docker-compose.production.yml"
 grep -q 'import "server-only"' "$root/apps/web/lib/api.ts"
@@ -25,6 +26,10 @@ grep -q 'pg_dump.*--format=custom' "$root/deploy/linux/backup.sh"
 grep -q '%Y%m%dT%H%M%SZ' "$root/deploy/linux/backup.sh"
 grep -q 'sportsintel-.*\.dump' "$root/deploy/linux/backup.sh"
 grep -q 'previous_release_commit' "$root/deploy/linux/rollback.sh"
+grep -q 'acquire_operation_lock' "$root/deploy/linux/deploy.sh"
+grep -q 'acquire_operation_lock' "$root/deploy/linux/backup.sh"
+grep -q 'acquire_operation_lock' "$root/deploy/linux/restore.sh"
+grep -q 'remain stopped' "$root/deploy/linux/restore.sh"
 grep -q 'Invalid Git ref' "$root/deploy/linux/preflight.sh"
 grep -q 'RestartCount' "$root/deploy/linux/status.sh"
 if grep -Eq 'DATABASE_URL|ADMIN_KEY|POSTGRES_PASSWORD' "$root/deploy/linux/status.sh"; then

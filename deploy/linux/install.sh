@@ -18,7 +18,7 @@ source /etc/os-release
 [[ "${ID:-}" == "ubuntu" || "${ID:-}" == "debian" ]] || { echo "Supported hosts are Ubuntu LTS and Debian stable." >&2; exit 1; }
 
 missing=()
-for tool in git curl openssl docker apache2ctl htpasswd pg_dump pg_restore python3; do command -v "$tool" >/dev/null 2>&1 || missing+=("$tool"); done
+for tool in git curl openssl docker apache2ctl htpasswd pg_dump pg_restore python3 flock; do command -v "$tool" >/dev/null 2>&1 || missing+=("$tool"); done
 docker compose version >/dev/null 2>&1 || missing+=("docker-compose-plugin")
 if $check_only; then
   ((${#missing[@]} == 0)) || { echo "Missing host prerequisites: ${missing[*]}" >&2; exit 1; }
@@ -39,6 +39,7 @@ if ((${#missing[@]})); then
   command -v pg_dump >/dev/null 2>&1 || packages+=(postgresql-client)
   command -v pg_restore >/dev/null 2>&1 || packages+=(postgresql-client)
   command -v python3 >/dev/null 2>&1 || packages+=(python3)
+  command -v flock >/dev/null 2>&1 || packages+=(util-linux)
   command -v docker >/dev/null 2>&1 || packages+=(docker.io)
   ((${#packages[@]} == 0)) || DEBIAN_FRONTEND=noninteractive apt-get install -y "${packages[@]}"
   if ! docker compose version >/dev/null 2>&1; then

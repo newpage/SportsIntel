@@ -52,6 +52,9 @@ grep -q '0700.*\.docker' "$root/deploy/linux/install.sh"
 grep -q '0700.*\.docker.*\.config' "$root/deploy/linux/install.sh"
 grep -q 'DOCKER_CONFIG=.*docker_home' "$root/deploy/linux/preflight.sh"
 grep -q 'release.env.candidate' "$root/deploy/linux/deploy.sh"
+grep -q 'release.env.rollback' "$root/deploy/linux/deploy.sh"
+grep -q 'SPORTSINTEL_ENV_FILE="$active_release"' "$root/deploy/linux/deploy.sh"
+grep -q 'mv "$metadata_candidate" "$metadata"' "$root/deploy/linux/deploy.sh"
 grep -q 'trap failure_handler' "$root/deploy/linux/deploy.sh"
 grep -q 'SPORTSINTEL_TEST_FAIL_PHASE' "$root/deploy/linux/deploy.sh"
 # Match the literal candidate variable in deploy.sh.
@@ -59,4 +62,20 @@ grep -q 'SPORTSINTEL_TEST_FAIL_PHASE' "$root/deploy/linux/deploy.sh"
 promotion_line="$(grep -n 'mv "$candidate"' "$root/deploy/linux/deploy.sh" | cut -d: -f1)"
 smoke_line="$(grep -n 'smoke-test.sh' "$root/deploy/linux/deploy.sh" | tail -1 | cut -d: -f1)"
 [[ "$promotion_line" -gt "$smoke_line" ]]
+
+echo "Testing exclusive operation lock"
+if command -v flock >/dev/null 2>&1; then
+  mkdir -p "$tmp/lock-root/shared"
+  SPORTSINTEL_DEPLOY_ROOT="$tmp/lock-root" bash -c '
+    set -e
+    source "$1"
+    acquire_operation_lock
+    if SPORTSINTEL_DEPLOY_ROOT="$SPORTSINTEL_DEPLOY_ROOT" SPORTSINTEL_OPERATION_LOCK_HELD=false bash -c '\''source "$1"; acquire_operation_lock'\'' _ "$1" 2>/dev/null; then
+      echo "concurrent operation acquired lock" >&2
+      exit 1
+    fi
+  ' _ "$root/deploy/linux/lib/common.sh"
+else
+  grep -q 'require_command flock || return 1' "$root/deploy/linux/lib/common.sh"
+fi
 echo "First-deployment hardening tests passed."

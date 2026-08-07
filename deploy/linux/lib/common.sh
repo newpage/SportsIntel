@@ -7,6 +7,19 @@ env_file() { printf '%s\n' "${SPORTSINTEL_ENV_FILE:-$(shared_root)/production.en
 compose() { docker compose --project-name "${COMPOSE_PROJECT_NAME:-sportsintel}" --env-file "$(env_file)" -f "$(repo_root)/docker-compose.production.yml" "$@"; }
 require_command() { command -v "$1" >/dev/null 2>&1 || { echo "Required command not found: $1" >&2; return 1; }; }
 require_tools() { for tool in "$@"; do require_command "$tool"; done; }
+acquire_operation_lock() {
+  [[ "${SPORTSINTEL_OPERATION_LOCK_HELD:-false}" == "true" ]] && return 0
+  require_command flock || return 1
+  local lock_file
+  lock_file="$(shared_root)/operation.lock"
+  exec 9>"$lock_file"
+  chmod 660 "$lock_file"
+  flock -n 9 || {
+    echo "Another SportsIntel deployment, backup, or restore operation is already running." >&2
+    return 1
+  }
+  export SPORTSINTEL_OPERATION_LOCK_HELD=true
+}
 require_env_file() {
   local file; file="$(env_file)"
   [[ -r "$file" ]] || { echo "Production environment file is not readable: $file" >&2; return 1; }

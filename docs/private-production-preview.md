@@ -113,7 +113,8 @@ prints the failed validation; inspect `docker compose ... logs` before retrying.
 Deployment waits up to 120 seconds for both container health and `pg_isready`
 before applying the schema. Release environment and metadata are promoted only
 after API/web health and smoke tests pass. On failure the prior checkout and
-application are restored where practical, PostgreSQL data is never deleted, and
+release environment are restored before the prior application is recreated,
+PostgreSQL data is never deleted, and
 the failing phase plus a safe cleanup command are printed.
 
 For external acceptance:
@@ -167,7 +168,13 @@ deploy/linux/restore.sh /opt/sportsintel/backups/<APPROVED_BACKUP>.dump --yes
 ```
 
 Restore validates the archive, makes a pre-restore backup, stops dependents,
-restores PostgreSQL, restarts the stack, and runs smoke tests.
+restores PostgreSQL, restarts the stack, and runs smoke tests. If restoration
+fails after dependents stop, API and web intentionally remain stopped so they
+cannot serve against a partially restored database; inspect PostgreSQL logs and
+recover from the newly created pre-restore backup before restarting them.
+
+Deployment, rollback, backup, and restore operations share an exclusive lock.
+If another operation is active, a second command exits without making changes.
 
 ## Upgrade and rollback
 
