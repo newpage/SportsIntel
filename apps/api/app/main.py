@@ -8,6 +8,7 @@ from app.engine import all_predictions
 from app.auth import require_admin_api_key
 from app.configuration import Settings
 from app.news import fetch_yahoo_nfl_news
+from app.sport_providers.nfl import nfl_yahoo_game_context
 from app.mlb import mlb_game, mlb_home, mlb_results
 from app.intelligence.nfl_review import build_nfl_review
 from app.intelligence.nfl_command_center import (
@@ -164,6 +165,14 @@ def sports_capabilities(sport: str):
 @app.get("/api/sports/{sport}")
 def sport_home(sport: str):
     return sports_home(sport)
+
+
+@app.get("/api/sports/nfl/game/{game_id}/context")
+def nfl_game_context(game_id: str):
+    context = nfl_yahoo_game_context(game_id)
+    if context is None:
+        raise HTTPException(status_code=404, detail="NFL game not found")
+    return context
 
 
 @app.get("/api/sports/nfl/review")

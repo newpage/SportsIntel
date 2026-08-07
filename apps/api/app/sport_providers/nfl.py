@@ -4,6 +4,7 @@ from datetime import date, timedelta
 from email.utils import parsedate_to_datetime
 import json
 import os
+import re
 import time
 from typing import Any
 
@@ -49,6 +50,162 @@ SCHEDULE_LOOKAHEAD_DAYS = 14
 _CACHE: tuple[float, list[SportGame]] | None = None
 _LAST_ERROR: str | None = None
 _LAST_SOURCE: str | None = None
+_YAHOO_CONTEXT_CACHE: dict[str, tuple[float, dict[str, Any]]] = {}
+
+
+def _balanced_json_object(value: str, start: int) -> str | None:
+    depth = 0
+    in_string = False
+    escaped = False
+    for position in range(start, len(value)):
+        character = value[position]
+        if in_string:
+            if escaped:
+                escaped = False
+            elif character == "\\":
+                escaped = True
+            elif character == '"':
+                in_string = False
+            continue
+        if character == '"':
+            in_string = True
+        elif character == "{":
+            depth += 1
+        elif character == "}":
+            depth -= 1
+            if depth == 0:
+                return value[start:position + 1]
+    return None
+
+
+def _yahoo_matchup_payload(html: str, source_game_id: str) -> dict[str, Any]:
+    marker = f'"game":{{"gameId":"{source_game_id}"'
+    for match in re.finditer(
+        r"self\.__next_f\.push\((\[.*?\])\)</script>",
+        html,
+        re.DOTALL,
+    ):
+        try:
+            flight_chunk = json.loads(match.group(1))
+        except json.JSONDecodeError:
+            continue
+        if len(flight_chunk) < 2 or not isinstance(flight_chunk[1], str):
+            continue
+        content = flight_chunk[1]
+        marker_position = content.find(marker)
+        if marker_position < 0:
+            continue
+        object_start = marker_position + len('"game":')
+        raw_game = _balanced_json_object(content, object_start)
+        if raw_game:
+            try:
+                payload = json.loads(raw_game)
+            except json.JSONDecodeError:
+                continue
+            if isinstance(payload, dict):
+                return payload
+    return {}
+
+
+def _yahoo_injuries(team: Any) -> list[dict[str, Any]]:
+    if not isinstance(team, dict):
+        return []
+    result: list[dict[str, Any]] = []
+    for player in team.get("injuredPlayers", []):
+        if not isinstance(player, dict):
+            continue
+        injury = player.get("injury")
+        injury = injury if isinstance(injury, dict) else {}
+        positions = player.get("positionIds")
+        positions = positions if isinstance(positions, list) else []
+        name = player.get("displayName")
+        if not name:
+            continue
+        result.append(
+            {
+                "name": str(name),
+                "positions": [str(item) for item in positions],
+                "status": str(injury.get("typeName") or "Injury listed"),
+                "description": str(injury.get("description") or ""),
+                "source": "Yahoo Sports",
+                "affects_prediction": False,
+            }
+        )
+    return result
+
+
+def _quarterback_injuries(injuries: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    return [
+        item
+        for item in injuries
+        if any(
+            str(position).upper() in {"QB", "QUARTERBACK"}
+            for position in item.get("positions", [])
+        )
+    ]
+
+
+def _yahoo_context_from_html(html: str, source_game_id: str) -> dict[str, Any]:
+    payload = _yahoo_matchup_payload(html, source_game_id)
+    if not payload:
+        return {}
+    venue = payload.get("venue")
+    venue = venue if isinstance(venue, dict) else {}
+    away_injuries = _yahoo_injuries(payload.get("awayTeam"))
+    home_injuries = _yahoo_injuries(payload.get("homeTeam"))
+    return {
+        "venue": venue.get("displayName"),
+        "venue_details": {
+            key: venue.get(key)
+            for key in ("displayName", "city", "state", "country", "coverType")
+            if venue.get(key) is not None
+        },
+        "away_injuries": away_injuries,
+        "home_injuries": home_injuries,
+        "away_qb_injuries": _quarterback_injuries(away_injuries),
+        "home_qb_injuries": _quarterback_injuries(home_injuries),
+        "injury_source": "Yahoo Sports",
+        "injuries_affect_prediction": False,
+    }
+
+
+def nfl_yahoo_game_context(game_id: str) -> dict[str, Any] | None:
+    game = next((item for item in _fetch_schedule() if item.game_id == game_id), None)
+    if game is None:
+        return None
+    metadata = game.metadata if isinstance(game.metadata, dict) else {}
+    source_game_id = str(metadata.get("source_game_id") or "")
+    source_url = str(metadata.get("source_url") or "")
+    base = "https://sports.yahoo.com"
+    if metadata.get("source") != "Yahoo Sports" or not source_game_id:
+        return {"game_id": game_id, "venue": game.venue, "metadata": {}}
+    if not source_url.startswith("/"):
+        return {"game_id": game_id, "venue": game.venue, "metadata": {}}
+
+    now = time.monotonic()
+    cached = _YAHOO_CONTEXT_CACHE.get(source_game_id)
+    if cached and cached[0] > now:
+        context = cached[1]
+    else:
+        try:
+            response = httpx.get(
+                f"{base}{source_url}",
+                headers={"User-Agent": "Mozilla/5.0", "Accept": "text/html"},
+                timeout=15,
+                follow_redirects=True,
+            )
+            response.raise_for_status()
+            context = _yahoo_context_from_html(response.text, source_game_id)
+        except Exception:
+            context = {}
+        _YAHOO_CONTEXT_CACHE[source_game_id] = (now + CACHE_SECONDS, context)
+
+    return {
+        "game_id": game_id,
+        "venue": context.get("venue") or game.venue,
+        "metadata": context,
+        "affects_prediction": False,
+    }
 def _status(value: str | None) -> GameStatus:
     normalized = (value or "").strip().lower()
 
@@ -604,6 +761,10 @@ def _yahoo_game(
     away_qb = _qb_context(scoreboard, game_id, away_team, "away")
     home_qb = _qb_context(scoreboard, game_id, home_team, "home")
     market = _market_context(scoreboard, game_id)
+    navigation_links = payload.get("navigation_links")
+    navigation_links = navigation_links if isinstance(navigation_links, dict) else {}
+    match_page = navigation_links.get("match_page")
+    match_page = match_page if isinstance(match_page, dict) else {}
 
     status_text = (
         payload.get("status")
@@ -645,6 +806,7 @@ def _yahoo_game(
             "schedule_confirmed": True,
             "source": "Yahoo Sports",
             "source_game_id": game_id,
+            "source_url": match_page.get("url"),
             "status_detail": status_text,
             "away_record": away_record,
             "home_record": home_record,

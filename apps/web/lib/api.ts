@@ -102,3 +102,16 @@ export async function getNflChanges(gameId: string) {
     return null;
   }
 }
+
+export async function getNflGameContext(gameId: string) {
+  try {
+    const response = await fetch(
+      `${API_URL}/api/sports/nfl/game/${encodeURIComponent(gameId)}/context`,
+      { cache: "no-store" },
+    );
+    if (!response.ok) return null;
+    return response.json();
+  } catch {
+    return null;
+  }
+}

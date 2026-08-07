@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { getNflChanges, getSport } from "../../../lib/api";
+import { getNflChanges, getNflGameContext, getSport } from "../../../lib/api";
 import type {
   MarketPrediction,
   QualifiedConsensus,
@@ -77,6 +77,10 @@ export default async function NflGamePage({
   if (!item) notFound();
 
   const { game, prediction } = item;
+  const yahooContext = await getNflGameContext(game.game_id) as {
+    venue?: string | null;
+    metadata?: Record<string, unknown>;
+  } | null;
   const snapshotChanges = (await getNflChanges(
     game.game_id,
   )) as SnapshotChangesResponse | null;
@@ -90,7 +94,10 @@ export default async function NflGamePage({
     ? explanation.reasons
     : [];
   const metadata = prediction.metadata || {};
-  const gameMetadata = game.metadata || {};
+  const gameMetadata = {
+    ...(game.metadata || {}),
+    ...(yahooContext?.metadata || {}),
+  };
   const awayRecord =
     typeof gameMetadata.away_record === "string"
       ? gameMetadata.away_record
@@ -110,7 +117,18 @@ export default async function NflGamePage({
     typeof gameMetadata.home_qb === "object"
       ? (gameMetadata.home_qb as Record<string, unknown>)
       : null;
-  const hasQb = Boolean(awayQb?.name || homeQb?.name);
+  const awayInjuries = Array.isArray(gameMetadata.away_injuries)
+    ? gameMetadata.away_injuries as Array<Record<string, unknown>>
+    : [];
+  const homeInjuries = Array.isArray(gameMetadata.home_injuries)
+    ? gameMetadata.home_injuries as Array<Record<string, unknown>>
+    : [];
+  const awayQbInjuries = Array.isArray(gameMetadata.away_qb_injuries)
+    ? gameMetadata.away_qb_injuries as Array<Record<string, unknown>>
+    : [];
+  const homeQbInjuries = Array.isArray(gameMetadata.home_qb_injuries)
+    ? gameMetadata.home_qb_injuries as Array<Record<string, unknown>>
+    : [];
   const readinessScore =
     typeof metadata.data_readiness_score === "number"
       ? metadata.data_readiness_score
@@ -216,7 +234,7 @@ export default async function NflGamePage({
               {game.away_team} at {game.home_team}
             </div>
             <div className="subtle">
-              {game.venue || "Venue not yet available"}
+              {yahooContext?.venue || game.venue || "Venue not yet available"}
             </div>
             {hasRecord && (
               <div className="subtle">
@@ -274,15 +292,17 @@ export default async function NflGamePage({
           </section>
         )}
 
-        {hasQb && (
-          <section className="mlb-detail-grid">
+        <section className="mlb-detail-grid">
             <div className="market-card">
               <span>Away quarterback</span>
               <strong>
                 {awayQb?.name ? String(awayQb.name) : "Not announced"}
               </strong>
               <small>
-                {awayQb?.status ? String(awayQb.status) : "Pending"}
+                {awayQb?.status ? String(awayQb.status) : "Starter not announced"}
+                {awayQbInjuries.length > 0
+                  ? ` · ${String(awayQbInjuries[0].name)}: ${String(awayQbInjuries[0].status)}`
+                  : ""}
               </small>
             </div>
             <div className="market-card">
@@ -296,8 +316,38 @@ export default async function NflGamePage({
                 {homeQb?.name ? String(homeQb.name) : "Not announced"}
               </strong>
               <small>
-                {homeQb?.status ? String(homeQb.status) : "Pending"}
+                {homeQb?.status ? String(homeQb.status) : "Starter not announced"}
+                {homeQbInjuries.length > 0
+                  ? ` · ${String(homeQbInjuries[0].name)}: ${String(homeQbInjuries[0].status)}`
+                  : ""}
               </small>
+            </div>
+        </section>
+
+        {(awayInjuries.length > 0 || homeInjuries.length > 0) && (
+          <section className="card">
+            <div className="section-heading">
+              <div>
+                <div className="eyebrow">Yahoo Sports</div>
+                <h2>Injury observations</h2>
+              </div>
+              <span className="subtle">Observation only</span>
+            </div>
+            <div className="mlb-detail-grid">
+              {[
+                [game.away_team, awayInjuries],
+                [game.home_team, homeInjuries],
+              ].map(([team, injuries]) => (
+                <div className="market-card" key={String(team)}>
+                  <span>{String(team)}</span>
+                  <strong>{(injuries as Array<Record<string, unknown>>).length} listed</strong>
+                  <small>
+                    {(injuries as Array<Record<string, unknown>>).slice(0, 3).map((injury) =>
+                      `${String(injury.name)} — ${String(injury.status)}`
+                    ).join(" · ") || "No injuries listed"}
+                  </small>
+                </div>
+              ))}
             </div>
           </section>
         )}
